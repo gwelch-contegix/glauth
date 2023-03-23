@@ -11,7 +11,8 @@ import (
 	"github.com/GeertJohan/yubigo"
 	"github.com/glauth/glauth/v2/pkg/config"
 	"github.com/glauth/glauth/v2/pkg/stats"
-	"github.com/nmcclain/ldap"
+	"github.com/go-ldap/ldap/v3"
+	"github.com/gwelch-contegix/ldaps"
 )
 
 type configHandler struct {
@@ -52,27 +53,27 @@ func (h configHandler) GetYubikeyAuth() *yubigo.YubiAuth {
 }
 
 // Bind implements a bind request against the config file
-func (h configHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (resultCode ldap.LDAPResultCode, err error) {
+func (h configHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (resultCode uint16, err error) {
 	return h.ldohelper.Bind(h, bindDN, bindSimplePw, conn)
 }
 
 // Search implements a search request against the config file
-func (h configHandler) Search(bindDN string, searchReq ldap.SearchRequest, conn net.Conn) (result ldap.ServerSearchResult, err error) {
+func (h configHandler) Search(bindDN string, searchReq ldap.SearchRequest, conn net.Conn) (result ldaps.ServerSearchResult, err error) {
 	return h.ldohelper.Search(h, bindDN, searchReq, conn)
 }
 
 // Add is not supported for a static config file
-func (h configHandler) Add(boundDN string, req ldap.AddRequest, conn net.Conn) (result ldap.LDAPResultCode, err error) {
+func (h configHandler) Add(boundDN string, req ldap.AddRequest, conn net.Conn) (result uint16, err error) {
 	return ldap.LDAPResultInsufficientAccessRights, nil
 }
 
 // Modify is not supported for a static config file
-func (h configHandler) Modify(boundDN string, req ldap.ModifyRequest, conn net.Conn) (result ldap.LDAPResultCode, err error) {
+func (h configHandler) Modify(boundDN string, req ldap.ModifyRequest, conn net.Conn) (result uint16, err error) {
 	return ldap.LDAPResultInsufficientAccessRights, nil
 }
 
 // Delete is not supported for a static config file
-func (h configHandler) Delete(boundDN string, deleteDN string, conn net.Conn) (result ldap.LDAPResultCode, err error) {
+func (h configHandler) Delete(boundDN string, deleteDN string, conn net.Conn) (result uint16, err error) {
 	return ldap.LDAPResultInsufficientAccessRights, nil
 }
 

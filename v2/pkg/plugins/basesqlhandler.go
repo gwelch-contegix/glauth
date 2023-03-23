@@ -17,7 +17,8 @@ import (
 	"github.com/glauth/glauth/v2/pkg/config"
 	"github.com/glauth/glauth/v2/pkg/handler"
 	"github.com/glauth/glauth/v2/pkg/stats"
-	"github.com/nmcclain/ldap"
+	"github.com/go-ldap/ldap/v3"
+	"github.com/gwelch-contegix/ldaps"
 )
 
 var configattributematcher = regexp.MustCompile(`(?i)\((?P<attribute>[a-zA-Z0-9]+)\s*=\s*(?P<value>.*)\)`)
@@ -111,26 +112,26 @@ func (h databaseHandler) GetYubikeyAuth() *yubigo.YubiAuth {
 	return h.yubikeyAuth
 }
 
-func (h databaseHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (resultCode ldap.LDAPResultCode, err error) {
+func (h databaseHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (resultCode uint16, err error) {
 	return h.ldohelper.Bind(h, bindDN, bindSimplePw, conn)
 }
 
-func (h databaseHandler) Search(bindDN string, searchReq ldap.SearchRequest, conn net.Conn) (result ldap.ServerSearchResult, err error) {
+func (h databaseHandler) Search(bindDN string, searchReq ldap.SearchRequest, conn net.Conn) (result ldaps.ServerSearchResult, err error) {
 	return h.ldohelper.Search(h, bindDN, searchReq, conn)
 }
 
 // Add is not yet supported for the sql backend
-func (h databaseHandler) Add(boundDN string, req ldap.AddRequest, conn net.Conn) (result ldap.LDAPResultCode, err error) {
+func (h databaseHandler) Add(boundDN string, req ldap.AddRequest, conn net.Conn) (result uint16, err error) {
 	return ldap.LDAPResultInsufficientAccessRights, nil
 }
 
 // Modify is not yet supported for the sql backend
-func (h databaseHandler) Modify(boundDN string, req ldap.ModifyRequest, conn net.Conn) (result ldap.LDAPResultCode, err error) {
+func (h databaseHandler) Modify(boundDN string, req ldap.ModifyRequest, conn net.Conn) (result uint16, err error) {
 	return ldap.LDAPResultInsufficientAccessRights, nil
 }
 
 // Delete is not yet supported for the sql backend
-func (h databaseHandler) Delete(boundDN string, deleteDN string, conn net.Conn) (result ldap.LDAPResultCode, err error) {
+func (h databaseHandler) Delete(boundDN string, deleteDN string, conn net.Conn) (result uint16, err error) {
 	return ldap.LDAPResultInsufficientAccessRights, nil
 }
 

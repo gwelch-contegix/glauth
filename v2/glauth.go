@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"github.com/BurntSushi/toml"
 	"github.com/GeertJohan/yubigo"
 	"github.com/arl/statsviz"
 	docopt "github.com/docopt/docopt-go"
@@ -12,7 +13,6 @@ import (
 	"github.com/glauth/glauth/v2/pkg/logging"
 	"github.com/glauth/glauth/v2/pkg/server"
 	"github.com/glauth/glauth/v2/pkg/stats"
-	"github.com/hydronica/toml"
 	"github.com/jinzhu/copier"
 	"github.com/rs/zerolog"
 	"gopkg.in/amz.v3/aws"
@@ -306,8 +306,6 @@ func parseConfigFile(configFileLocation string) (*config.Config, error) {
 			return &cfg, fmt.Errorf("non-existent config path: %s", configFileLocation)
 		}
 
-		var md toml.MetaData
-
 		if fInfo.IsDir() { // multiple files in a directory
 			rawCfgStruct := make(map[string]interface{})
 
@@ -349,38 +347,16 @@ func parseConfigFile(configFileLocation string) (*config.Config, error) {
 			}
 			fmt.Println(destbuf.String())
 			merged := config.Config{}
-			if md, err = toml.Decode(destbuf.String(), &merged); err != nil {
+			if _, err = toml.Decode(destbuf.String(), &merged); err != nil {
 				return &cfg, err
 			}
 			cfg = merged
 		} else {
-			md, err = toml.DecodeFile(configFileLocation, &cfg)
+			_, err = toml.DecodeFile(configFileLocation, &cfg)
 			if err != nil {
 				return &cfg, err
 			}
 		}
-
-		switch users := md.Mappings()["users"].(type) {
-		case []map[string]interface{}:
-			for _, mduser := range users {
-				if mduser["customattributes"] != nil {
-					for idx, cfguser := range cfg.Users {
-						if cfguser.Name == mduser["name"].(string) {
-							switch attributes := mduser["customattributes"].(type) {
-							case []map[string]interface{}:
-								cfg.Users[idx].CustomAttrs = attributes[0]
-							case map[string]interface{}:
-								cfg.Users[idx].CustomAttrs = attributes
-							default:
-								log.Info().Interface("attributes", attributes).Msg("Unknown attribute structure in config file")
-							}
-							break
-						}
-					}
-				}
-			}
-		}
-
 	}
 
 	// Backward Compability

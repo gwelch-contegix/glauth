@@ -17,7 +17,8 @@ import (
 
 	"github.com/glauth/glauth/v2/pkg/config"
 	"github.com/glauth/glauth/v2/pkg/stats"
-	"github.com/nmcclain/ldap"
+	"github.com/go-ldap/ldap/v3"
+	"github.com/gwelch-contegix/ldaps"
 	"github.com/pquerna/otp/totp"
 )
 
@@ -88,8 +89,7 @@ func NewLdapHandler(opts ...Option) Handler {
 	return handler
 }
 
-//
-func (h ldapHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (resultCode ldap.LDAPResultCode, err error) {
+func (h ldapHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (resultCode uint16, err error) {
 	h.log.Debug().Str("binddn", bindDN).Str("src", conn.RemoteAddr().String()).Msg("Bind request")
 
 	//	if h.helper != nil {
@@ -154,8 +154,7 @@ func (h ldapHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (resultCod
 	return ldap.LDAPResultSuccess, nil
 }
 
-//
-func (h ldapHandler) Search(boundDN string, searchReq ldap.SearchRequest, conn net.Conn) (result ldap.ServerSearchResult, err error) {
+func (h ldapHandler) Search(boundDN string, searchReq ldap.SearchRequest, conn net.Conn) (result ldaps.ServerSearchResult, err error) {
 	wantAttributes := true
 	wantTypesOnly := false
 
@@ -179,7 +178,7 @@ func (h ldapHandler) Search(boundDN string, searchReq ldap.SearchRequest, conn n
 	s, err := h.getSession(conn)
 	if err != nil {
 		stats.Frontend.Add("search_ldapSession_errors", 1)
-		return ldap.ServerSearchResult{ResultCode: ldap.LDAPResultOperationsError}, nil
+		return ldaps.ServerSearchResult{ResultCode: ldap.LDAPResultOperationsError}, nil
 	}
 	search := ldap.NewSearchRequest(
 		searchReq.BaseDN,
@@ -256,7 +255,7 @@ func (h ldapHandler) Search(boundDN string, searchReq ldap.SearchRequest, conn n
 		}
 	}
 
-	ssr := ldap.ServerSearchResult{
+	ssr := ldaps.ServerSearchResult{
 		Entries:   sr.Entries,
 		Referrals: sr.Referrals,
 		Controls:  sr.Controls,
@@ -266,7 +265,7 @@ func (h ldapHandler) Search(boundDN string, searchReq ldap.SearchRequest, conn n
 		e := err.(*ldap.Error)
 		h.log.Debug().Err(err).Msg("search Err")
 		stats.Frontend.Add("search_errors", 1)
-		ssr.ResultCode = ldap.LDAPResultCode(e.ResultCode)
+		ssr.ResultCode = uint16(e.ResultCode)
 		return ssr, err
 	}
 	stats.Frontend.Add("search_successes", 1)
@@ -298,17 +297,17 @@ func (h ldapHandler) buildReqAttributesList(filter string, filters []string) []s
 }
 
 // Add is not yet supported for the ldap backend
-func (h ldapHandler) Add(boundDN string, req ldap.AddRequest, conn net.Conn) (result ldap.LDAPResultCode, err error) {
+func (h ldapHandler) Add(boundDN string, req ldap.AddRequest, conn net.Conn) (result uint16, err error) {
 	return ldap.LDAPResultInsufficientAccessRights, nil
 }
 
 // Modify is not yet supported for the ldap backend
-func (h ldapHandler) Modify(boundDN string, req ldap.ModifyRequest, conn net.Conn) (result ldap.LDAPResultCode, err error) {
+func (h ldapHandler) Modify(boundDN string, req ldap.ModifyRequest, conn net.Conn) (result uint16, err error) {
 	return ldap.LDAPResultInsufficientAccessRights, nil
 }
 
 // Delete is not yet supported for the ldap backend
-func (h ldapHandler) Delete(boundDN string, deleteDN string, conn net.Conn) (result ldap.LDAPResultCode, err error) {
+func (h ldapHandler) Delete(boundDN string, deleteDN string, conn net.Conn) (result uint16, err error) {
 	return ldap.LDAPResultInsufficientAccessRights, nil
 }
 
@@ -362,7 +361,6 @@ func (h *ldapHandler) monitorServers() {
 	}()
 }
 
-//
 func (h ldapHandler) getSession(conn net.Conn) (ldapSession, error) {
 	id := connID(conn)
 	h.lock.Lock()
@@ -399,7 +397,6 @@ func (h ldapHandler) getSession(conn net.Conn) (ldapSession, error) {
 	return s, nil
 }
 
-//
 func (h ldapHandler) ping() error {
 	healthy := false
 	for k, s := range h.servers {
@@ -442,7 +439,6 @@ func (h ldapHandler) ping() error {
 	return nil
 }
 
-//
 func (h ldapHandler) getBestServer() (ldapBackend, error) {
 	favorite := ldapBackend{}
 	forever, err := time.ParseDuration("30m")

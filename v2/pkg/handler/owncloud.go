@@ -15,7 +15,8 @@ import (
 
 	"github.com/glauth/glauth/v2/pkg/config"
 	"github.com/glauth/glauth/v2/pkg/stats"
-	"github.com/nmcclain/ldap"
+	"github.com/go-ldap/ldap/v3"
+	"github.com/gwelch-contegix/ldaps"
 	msgraph "github.com/yaegashi/msgraph.go/v1.0"
 )
 
@@ -38,7 +39,7 @@ type ownCloudHandler struct {
 // global lock for ownCloudHandler sessions & servers manipulation
 var ownCloudLock sync.Mutex
 
-func (h ownCloudHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (ldap.LDAPResultCode, error) {
+func (h ownCloudHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (uint16, error) {
 	bindDN = strings.ToLower(bindDN)
 	baseDN := strings.ToLower("," + h.backend.BaseDN)
 
@@ -83,7 +84,7 @@ func (h ownCloudHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (ldap.
 	return ldap.LDAPResultSuccess, nil
 }
 
-func (h ownCloudHandler) Search(bindDN string, searchReq ldap.SearchRequest, conn net.Conn) (ldap.ServerSearchResult, error) {
+func (h ownCloudHandler) Search(bindDN string, searchReq ldap.SearchRequest, conn net.Conn) (ldaps.ServerSearchResult, error) {
 	bindDN = strings.ToLower(bindDN)
 	baseDN := strings.ToLower("," + h.backend.BaseDN)
 	searchBaseDN := strings.ToLower(searchReq.BaseDN)
@@ -92,19 +93,19 @@ func (h ownCloudHandler) Search(bindDN string, searchReq ldap.SearchRequest, con
 
 	// validate the user is authenticated and has appropriate access
 	if len(bindDN) < 1 {
-		return ldap.ServerSearchResult{ResultCode: ldap.LDAPResultInsufficientAccessRights}, fmt.Errorf("search error: Anonymous BindDN not allowed %s", bindDN)
+		return ldaps.ServerSearchResult{ResultCode: ldap.LDAPResultInsufficientAccessRights}, fmt.Errorf("search error: Anonymous BindDN not allowed %s", bindDN)
 	}
 	if !strings.HasSuffix(bindDN, baseDN) {
-		return ldap.ServerSearchResult{ResultCode: ldap.LDAPResultInsufficientAccessRights}, fmt.Errorf("search error: BindDN %s not in our BaseDN %s", bindDN, h.backend.BaseDN)
+		return ldaps.ServerSearchResult{ResultCode: ldap.LDAPResultInsufficientAccessRights}, fmt.Errorf("search error: BindDN %s not in our BaseDN %s", bindDN, h.backend.BaseDN)
 	}
 	if !strings.HasSuffix(searchBaseDN, h.backend.BaseDN) {
-		return ldap.ServerSearchResult{ResultCode: ldap.LDAPResultInsufficientAccessRights}, fmt.Errorf("search error: search BaseDN %s is not in our BaseDN %s", searchBaseDN, h.backend.BaseDN)
+		return ldaps.ServerSearchResult{ResultCode: ldap.LDAPResultInsufficientAccessRights}, fmt.Errorf("search error: search BaseDN %s is not in our BaseDN %s", searchBaseDN, h.backend.BaseDN)
 	}
 	// return all users in the config file - the LDAP library will filter results for us
 	entries := []*ldap.Entry{}
-	filterEntity, err := ldap.GetFilterObjectClass(searchReq.Filter)
+	filterEntity, err := ldaps.GetFilterAttribute(searchReq.Filter, "objectclass")
 	if err != nil {
-		return ldap.ServerSearchResult{ResultCode: ldap.LDAPResultOperationsError}, fmt.Errorf("search error: error parsing filter: %s", searchReq.Filter)
+		return ldaps.ServerSearchResult{ResultCode: ldap.LDAPResultOperationsError}, fmt.Errorf("search error: error parsing filter: %s", searchReq.Filter)
 	}
 	h.lock.Lock()
 	id := connID(conn)
@@ -113,11 +114,11 @@ func (h ownCloudHandler) Search(bindDN string, searchReq ldap.SearchRequest, con
 
 	switch filterEntity {
 	default:
-		return ldap.ServerSearchResult{ResultCode: ldap.LDAPResultOperationsError}, fmt.Errorf("search error: unhandled filter type: %s [%s]", filterEntity, searchReq.Filter)
+		return ldaps.ServerSearchResult{ResultCode: ldap.LDAPResultOperationsError}, fmt.Errorf("search error: unhandled filter type: %s [%s]", filterEntity, searchReq.Filter)
 	case "posixgroup":
 		groups, err := session.getGroups()
 		if err != nil {
-			return ldap.ServerSearchResult{ResultCode: ldap.LDAPResultOperationsError}, errors.New("search error: error getting groups")
+			return ldaps.ServerSearchResult{ResultCode: ldap.LDAPResultOperationsError}, errors.New("search error: error getting groups")
 		}
 		for _, g := range groups {
 			attrs := []*ldap.EntryAttribute{}
@@ -147,7 +148,7 @@ func (h ownCloudHandler) Search(bindDN string, searchReq ldap.SearchRequest, con
 		users, err := session.getUsers(userName)
 		if err != nil {
 			h.log.Debug().Str("username", userName).Err(err).Msg("Could not get user")
-			return ldap.ServerSearchResult{ResultCode: ldap.LDAPResultOperationsError}, errors.New("search error: error getting users")
+			return ldaps.ServerSearchResult{ResultCode: ldap.LDAPResultOperationsError}, errors.New("search error: error getting users")
 		}
 		for _, u := range users {
 			attrs := []*ldap.EntryAttribute{}
@@ -169,21 +170,21 @@ func (h ownCloudHandler) Search(bindDN string, searchReq ldap.SearchRequest, con
 	}
 	stats.Frontend.Add("search_successes", 1)
 	h.log.Debug().Str("filter", searchReq.Filter).Msg("AP: Search OK")
-	return ldap.ServerSearchResult{Entries: entries, Referrals: []string{}, Controls: []ldap.Control{}, ResultCode: ldap.LDAPResultSuccess}, nil
+	return ldaps.ServerSearchResult{Entries: entries, Referrals: []string{}, Controls: []ldap.Control{}, ResultCode: ldap.LDAPResultSuccess}, nil
 }
 
 // Add is not yet supported for the owncloud backend
-func (h ownCloudHandler) Add(boundDN string, req ldap.AddRequest, conn net.Conn) (result ldap.LDAPResultCode, err error) {
+func (h ownCloudHandler) Add(boundDN string, req ldap.AddRequest, conn net.Conn) (result uint16, err error) {
 	return ldap.LDAPResultInsufficientAccessRights, nil
 }
 
 // Modify is not yet supported for the owncloud backend
-func (h ownCloudHandler) Modify(boundDN string, req ldap.ModifyRequest, conn net.Conn) (result ldap.LDAPResultCode, err error) {
+func (h ownCloudHandler) Modify(boundDN string, req ldap.ModifyRequest, conn net.Conn) (result uint16, err error) {
 	return ldap.LDAPResultInsufficientAccessRights, nil
 }
 
 // Delete is not yet supported for the owncloud backend
-func (h ownCloudHandler) Delete(boundDN string, deleteDN string, conn net.Conn) (result ldap.LDAPResultCode, err error) {
+func (h ownCloudHandler) Delete(boundDN string, deleteDN string, conn net.Conn) (result uint16, err error) {
 	return ldap.LDAPResultInsufficientAccessRights, nil
 }
 

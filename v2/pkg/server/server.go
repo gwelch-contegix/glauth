@@ -9,14 +9,14 @@ import (
 	"github.com/GeertJohan/yubigo"
 	"github.com/glauth/glauth/v2/pkg/config"
 	"github.com/glauth/glauth/v2/pkg/handler"
-	"github.com/nmcclain/ldap"
+	"github.com/gwelch-contegix/ldaps"
 )
 
 type LdapSvc struct {
 	log      zerolog.Logger
 	c        *config.Config
 	yubiAuth *yubigo.YubiAuth
-	l        *ldap.Server
+	l        *ldaps.Server
 }
 
 func NewServer(opts ...Option) (*LdapSvc, error) {
@@ -83,7 +83,7 @@ func NewServer(opts ...Option) (*LdapSvc, error) {
 	allHandlers := handler.HandlerWrapper{Handlers: make([]handler.Handler, 10), Count: &backendCounter}
 
 	// configure the backends
-	s.l = ldap.NewServer()
+	s.l = ldaps.NewServer()
 	s.l.EnforceLDAP = true
 	for i, backend := range s.c.Backends {
 		var h handler.Handler

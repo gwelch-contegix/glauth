@@ -27,7 +27,7 @@ type testEnv struct {
 func TestIntegerStuff(t *testing.T) {
 
 	Convey("Testing sample-simple local file-based LDAP server", t, func() {
-		svc := startSvc(SD, "bin/glauth", "-c", "sample-simple.cfg")
+		svc := startSvc(SD, "go", "run", "./", "-c", "sample-simple.cfg")
 		batteryOfTests(
 			t,
 			svc, testEnv{
@@ -50,7 +50,7 @@ func TestIntegerStuff(t *testing.T) {
 	matchingLibrary := doRunGetFirst(RD, "ls", "bin/sqlite.so")
 	if matchingLibrary == "bin/sqlite.so" {
 		Convey("Testing sample-database LDAP server", t, func() {
-			svc := startSvc(SD, "bin/glauth", "-c", "pkg/plugins/sample-database.cfg")
+			svc := startSvc(SD, "go", "run", "./", "-c", "pkg/plugins/sample-database.cfg")
 			batteryOfTests(
 				t,
 				svc, testEnv{
@@ -74,7 +74,7 @@ func TestIntegerStuff(t *testing.T) {
 	matchingContainers := doRunGetFirst(RD, "sh", "-c", "docker ps | grep openldap-service | wc -l")
 	if matchingContainers == "1" {
 		Convey("Testing sample-simple local LDAP server", t, func() {
-			svc := startSvc(SD, "bin/glauth", "-c", "sample-ldap-injection.cfg")
+			svc := startSvc(SD, "go", "run", "./", "-c", "sample-ldap-injection.cfg")
 			batteryOfTests(
 				t,
 				svc, testEnv{
@@ -209,7 +209,9 @@ func startSvc(delay time.Duration, name string, arg ...string) *exec.Cmd {
 }
 
 func stopSvc(svc *exec.Cmd) {
-	svc.Process.Kill()
+	if svc != nil && svc.Process != nil {
+		svc.Process.Kill()
+	}
 }
 
 func doRunGetFirst(delay time.Duration, name string, arg ...string) string {

@@ -89,7 +89,7 @@ type User struct {
 	GivenName     string
 	SN            string
 	Homedir       string
-	CustomAttrs   map[string]interface{}
+	CustomAttrs   map[string]interface{} `toml:"customattributes"`
 }
 type Group struct {
 	Name          string
