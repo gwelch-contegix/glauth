@@ -15,8 +15,8 @@ import (
 	"time"
 
 	"github.com/GeertJohan/yubigo"
-	"github.com/glauth/glauth/v2/pkg/config"
-	"github.com/glauth/glauth/v2/pkg/stats"
+	"github.com/gwelch-contegix/glauth/v2/pkg/config"
+	"github.com/gwelch-contegix/glauth/v2/pkg/stats"
 	"github.com/go-ldap/ldap/v3"
 	"github.com/gwelch-contegix/ldaps"
 	"github.com/pquerna/otp/totp"

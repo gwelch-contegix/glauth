@@ -5,7 +5,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/GeertJohan/yubigo"
-	"github.com/glauth/glauth/v2/pkg/config"
+	"github.com/gwelch-contegix/glauth/v2/pkg/config"
 )
 
 // Option defines a single option function.

@@ -14,9 +14,9 @@ import (
 	"strings"
 
 	"github.com/GeertJohan/yubigo"
-	"github.com/glauth/glauth/v2/pkg/config"
-	"github.com/glauth/glauth/v2/pkg/handler"
-	"github.com/glauth/glauth/v2/pkg/stats"
+	"github.com/gwelch-contegix/glauth/v2/pkg/config"
+	"github.com/gwelch-contegix/glauth/v2/pkg/handler"
+	"github.com/gwelch-contegix/glauth/v2/pkg/stats"
 	"github.com/go-ldap/ldap/v3"
 	"github.com/gwelch-contegix/ldaps"
 )
@@ -203,7 +203,7 @@ func (h databaseHandler) FindPosixAccounts(hierarchy string) (entrylist []*ldap.
 	}
 
 	rows, err := h.database.cnx.Query(`
-		SELECT u.name,u.uidnumber,u.primarygroup,u.passbcrypt,u.passsha256,u.otpsecret,u.yubikey,u.othergroups,u.givenname,u.sn,u.mail,u.loginshell,u.homedirectory,u.disabled,u.sshkeys,u.custattr  
+		SELECT u.name,u.uidnumber,u.primarygroup,u.passbcrypt,u.passsha256,u.otpsecret,u.yubikey,u.othergroups,u.givenname,u.sn,u.mail,u.loginshell,u.homedirectory,u.disabled,u.sshkeys,u.custattr
 		FROM users u`)
 	if err != nil {
 		return entries, err
@@ -315,8 +315,8 @@ func (h databaseHandler) memoizeGroups() ([]config.Group, error) {
 	workMemGroups := make([]*config.Group, 0)
 	rows, err := h.database.cnx.Query(`
 		SELECT g1.name,g1.gidnumber,ig.includegroupid
-		FROM groups g1 
-		LEFT JOIN includegroups ig ON g1.gidnumber=ig.parentgroupid 
+		FROM groups g1
+		LEFT JOIN includegroups ig ON g1.gidnumber=ig.parentgroupid
 		LEFT JOIN groups g2 ON ig.includegroupid=g2.gidnumber`)
 	if err != nil {
 		return nil, errors.New("Unable to memoize groups list")

@@ -7,8 +7,8 @@ import (
 	"plugin"
 
 	"github.com/GeertJohan/yubigo"
-	"github.com/glauth/glauth/v2/pkg/config"
-	"github.com/glauth/glauth/v2/pkg/handler"
+	"github.com/gwelch-contegix/glauth/v2/pkg/config"
+	"github.com/gwelch-contegix/glauth/v2/pkg/handler"
 	"github.com/gwelch-contegix/ldaps"
 )
 
