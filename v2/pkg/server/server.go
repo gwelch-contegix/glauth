@@ -117,7 +117,7 @@ func NewServer(opts ...Option) (*LdapSvc, error) {
 			if err != nil {
 				return nil, errors.New("unable to find 'NewPluginHandler' in loaded backend plugin")
 			}
-			initFunc, ok := nph.(func(...handler.Option) handler.Handler)
+			initFunc, ok := nph.(func(<-chan bool, ...handler.Option) handler.Handler)
 
 			if !ok {
 				return nil, errors.New("loaded backend plugin lacks a proper NewPluginHandler function")
@@ -125,6 +125,7 @@ func NewServer(opts ...Option) (*LdapSvc, error) {
 			// Normally, here, we would somehow have imported our plugin into our
 			// handler namespace. Oops?
 			h = initFunc(
+				s.l.Quit,
 				handler.Backend(backend),
 				handler.Logger(&s.log),
 				handler.Config(s.c),
@@ -167,7 +168,7 @@ func (s *LdapSvc) ListenAndServeTLS() error {
 	)
 }
 
-// Shutdown ends listeners by sending true to the ldap serves quit channel
+// Shutdown ends listeners by closing the ldap server quit channel
 func (s *LdapSvc) Shutdown() {
-	s.l.Quit <- true
+	close(s.l.Quit)
 }
