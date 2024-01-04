@@ -32,7 +32,7 @@ PLUGIN_TARGETS=linux/amd64,linux/386,linux/arm64,linux/arm-7,darwin/amd64,darwin
 #####################
 
 #help: @ List available tasks on this project
-help: 
+help:
 	@grep -E '[a-zA-Z\.\-]+:.*?@ .*$$' $(MAKEFILE_LIST)| tr -d '#' | sed -E 's/Makefile.//' | awk 'BEGIN {FS = ":.*?@ "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 
 #run: @ build and run - used for development
@@ -78,7 +78,7 @@ linux386:
 	mkdir -p bin/$@ && GOOS=linux GOARCH=386 go build ${TRIM_FLAGS} -ldflags "${BUILD_VARS}" -o bin/$@/glauth ${BUILD_FILES} && cd bin/$@ && sha256sum glauth > glauth.sha256
 
 linuxamd64:
-	mkdir -p bin/$@ && GOOS=linux GOARCH=amd64 go build ${TRIM_FLAGS} -ldflags "${BUILD_VARS}" -o bin/$@/glauth ${BUILD_FILES} && cd bin/$@ && sha256sum glauth > glauth.sha256
+	mkdir -p bin/$@ && GOOS=linux GOARCH=amd64 go build -linkshared ${TRIM_FLAGS} -ldflags "${BUILD_VARS}" -o bin/$@/glauth ${BUILD_FILES} && cd bin/$@ && sha256sum glauth > glauth.sha256
 
 linuxarm:
 	mkdir -p bin/$@ && GOOS=linux GOARCH=arm go build ${TRIM_FLAGS} -ldflags "${BUILD_VARS}" -o bin/$@/glauth ${BUILD_FILES} && cd bin/$@ && sha256sum glauth > glauth.sha256
