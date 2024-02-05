@@ -36,6 +36,12 @@ type Frontend struct {
 type LDAP struct {
 	Enabled bool
 	Listen  string
+	// StartTLS parameters
+	TLS         bool
+	TLSCert     string
+	TLSKey      string
+	TLSCertPath string
+	TLSKeyPath  string
 }
 type LDAPS struct {
 	Enabled bool
@@ -98,6 +104,13 @@ type Group struct {
 	GIDNumber     int
 	IncludeGroups []int
 }
+
+type Tracing struct {
+	Enabled      bool
+	GRPCEndpoint string
+	HTTPEndpoint string
+}
+
 type Config struct {
 	API                API
 	Backend            Backend // Deprecated
@@ -115,6 +128,7 @@ type Config struct {
 	LDAPS              LDAPS
 	Groups             []Group
 	Users              []User
+	Tracing            Tracing
 	ConfigFile         string
 	AwsAccessKeyId     string
 	AwsSecretAccessKey string

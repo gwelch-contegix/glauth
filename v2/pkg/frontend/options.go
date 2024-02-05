@@ -2,6 +2,7 @@ package frontend
 
 import (
 	"context"
+
 	"github.com/rs/zerolog"
 
 	"github.com/gwelch-contegix/glauth/v2/pkg/config"

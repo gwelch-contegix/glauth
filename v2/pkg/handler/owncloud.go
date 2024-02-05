@@ -6,16 +6,20 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/rs/zerolog"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel/trace"
+
+	"github.com/go-ldap/ldap/v3"
+	"github.com/gwelch-contegix/glauth/v2/internal/monitoring"
 	"github.com/gwelch-contegix/glauth/v2/pkg/config"
 	"github.com/gwelch-contegix/glauth/v2/pkg/stats"
-	"github.com/go-ldap/ldap/v3"
 	"github.com/gwelch-contegix/ldaps"
 	msgraph "github.com/yaegashi/msgraph.go/v1.0"
 )
@@ -34,12 +38,46 @@ type ownCloudHandler struct {
 	client   *http.Client
 	sessions map[string]ownCloudSession
 	lock     *sync.Mutex
+
+	monitor monitoring.MonitorInterface
+	tracer  trace.Tracer
 }
 
 // global lock for ownCloudHandler sessions & servers manipulation
 var ownCloudLock sync.Mutex
 
-func (h ownCloudHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (uint16, error) {
+func NewOwnCloudHandler(opts ...Option) Handler {
+	options := newOptions(opts...)
+
+	return ownCloudHandler{
+		backend:  options.Backend,
+		log:      options.Logger,
+		sessions: make(map[string]ownCloudSession),
+		lock:     &ownCloudLock,
+		client: &http.Client{
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{
+					InsecureSkipVerify: options.Backend.Insecure,
+				},
+			},
+		},
+		monitor: options.Monitor,
+		tracer:  options.Tracer,
+	}
+}
+
+func (h ownCloudHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (resultCode uint16, err error) {
+	start := time.Now()
+	defer func() {
+		h.monitor.SetResponseTimeMetric(
+			map[string]string{"operation": "bind", "status": fmt.Sprintf("%v", resultCode)},
+			time.Since(start).Seconds(),
+		)
+	}()
+
 	bindDN = strings.ToLower(bindDN)
 	baseDN := strings.ToLower("," + h.backend.BaseDN)
 
@@ -84,7 +122,15 @@ func (h ownCloudHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (uint1
 	return ldap.LDAPResultSuccess, nil
 }
 
-func (h ownCloudHandler) Search(bindDN string, searchReq ldap.SearchRequest, conn net.Conn) (ldaps.ServerSearchResult, error) {
+func (h ownCloudHandler) Search(bindDN string, searchReq ldap.SearchRequest, conn net.Conn) (result ldaps.ServerSearchResult, err error) {
+	start := time.Now()
+	defer func() {
+		h.monitor.SetResponseTimeMetric(
+			map[string]string{"operation": "search", "status": fmt.Sprintf("%v", result.ResultCode)},
+			time.Since(start).Seconds(),
+		)
+	}()
+
 	bindDN = strings.ToLower(bindDN)
 	baseDN := strings.ToLower("," + h.backend.BaseDN)
 	searchBaseDN := strings.ToLower(searchReq.BaseDN)
@@ -134,7 +180,7 @@ func (h ownCloudHandler) Search(bindDN string, searchReq ldap.SearchRequest, con
 
 				attrs = append(attrs, &ldap.EntryAttribute{Name: "memberUid", Values: members})
 			}
-			dn := fmt.Sprintf("cn=%s,%s=groups,%s", *g.ID, h.backend.GroupFormat, h.backend.BaseDN)
+			dn := fmt.Sprintf("%s=%s,ou=groups,%s", h.backend.GroupFormat, *g.ID, h.backend.BaseDN)
 			entries = append(entries, &ldap.Entry{DN: dn, Attributes: attrs})
 		}
 	case "posixaccount", "":
@@ -174,26 +220,56 @@ func (h ownCloudHandler) Search(bindDN string, searchReq ldap.SearchRequest, con
 }
 
 // Add is not yet supported for the owncloud backend
-func (h ownCloudHandler) Add(boundDN string, req ldap.AddRequest, conn net.Conn) (result uint16, err error) {
+func (h ownCloudHandler) Add(boundDN string, req ldap.AddRequest, conn net.Conn) (resultCode uint16, err error) {
+	start := time.Now()
+	defer func() {
+		h.monitor.SetResponseTimeMetric(
+			map[string]string{"operation": "add", "status": fmt.Sprintf("%v", resultCode)},
+			time.Since(start).Seconds(),
+		)
+	}()
 	return ldap.LDAPResultInsufficientAccessRights, nil
 }
 
 // Modify is not yet supported for the owncloud backend
-func (h ownCloudHandler) Modify(boundDN string, req ldap.ModifyRequest, conn net.Conn) (result uint16, err error) {
+func (h ownCloudHandler) Modify(boundDN string, req ldap.ModifyRequest, conn net.Conn) (resultCode uint16, err error) {
+	start := time.Now()
+	defer func() {
+		h.monitor.SetResponseTimeMetric(
+			map[string]string{"operation": "modify", "status": fmt.Sprintf("%v", resultCode)},
+			time.Since(start).Seconds(),
+		)
+	}()
 	return ldap.LDAPResultInsufficientAccessRights, nil
 }
 
 // Delete is not yet supported for the owncloud backend
-func (h ownCloudHandler) Delete(boundDN string, deleteDN string, conn net.Conn) (result uint16, err error) {
+func (h ownCloudHandler) Delete(boundDN string, deleteDN string, conn net.Conn) (resultCode uint16, err error) {
+	_, span := h.tracer.Start(context.Background(), "handler.configHandler.Delete")
+	defer span.End()
+
+	start := time.Now()
+	defer func() {
+		h.monitor.SetResponseTimeMetric(
+			map[string]string{"operation": "delete", "status": fmt.Sprintf("%v", resultCode)},
+			time.Since(start).Seconds(),
+		)
+	}()
 	return ldap.LDAPResultInsufficientAccessRights, nil
 }
 
 // FindUser with the given username. Called by the ldap backend to authenticate the bind. Optional
-func (h ownCloudHandler) FindUser(userName string, searchByUPN bool) (found bool, user config.User, err error) {
+func (h ownCloudHandler) FindUser(ctx context.Context, userName string, searchByUPN bool) (found bool, user config.User, err error) {
+	_, span := h.tracer.Start(ctx, "handler.ownCloudHandler.FindUser")
+	defer span.End()
+
 	return false, config.User{}, nil
 }
 
-func (h ownCloudHandler) FindGroup(groupName string) (found bool, group config.Group, err error) {
+func (h ownCloudHandler) FindGroup(ctx context.Context, groupName string) (found bool, group config.Group, err error) {
+	_, span := h.tracer.Start(ctx, "handler.ownCloudHandler.FindGroup")
+	defer span.End()
+
 	return false, config.Group{}, nil
 }
 
@@ -256,7 +332,7 @@ func (s ownCloudSession) getGroups() ([]msgraph.Group, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	b, err := ioutil.ReadAll(resp.Body)
+	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -327,7 +403,7 @@ func (s ownCloudSession) getUsers(userName string) ([]msgraph.User, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	b, err := ioutil.ReadAll(resp.Body)
+	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -352,25 +428,4 @@ func (s ownCloudSession) redirectPolicyFunc(req *http.Request, via []*http.Reque
 	s.log.Debug().Str("username", s.user).Msg("Setting user and password")
 	req.SetBasicAuth(s.user, s.password)
 	return nil
-}
-
-func NewOwnCloudHandler(opts ...Option) Handler {
-	options := newOptions(opts...)
-
-	return ownCloudHandler{
-		backend:  options.Backend,
-		log:      options.Logger,
-		sessions: make(map[string]ownCloudSession),
-		lock:     &ownCloudLock,
-		client: &http.Client{
-			CheckRedirect: func(req *http.Request, via []*http.Request) error {
-				return http.ErrUseLastResponse
-			},
-			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{
-					InsecureSkipVerify: options.Backend.Insecure,
-				},
-			},
-		},
-	}
 }

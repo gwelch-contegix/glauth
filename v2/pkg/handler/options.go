@@ -2,9 +2,12 @@ package handler
 
 import (
 	"context"
+
 	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/GeertJohan/yubigo"
+	"github.com/gwelch-contegix/glauth/v2/internal/monitoring"
 	"github.com/gwelch-contegix/glauth/v2/pkg/config"
 )
 
@@ -21,6 +24,8 @@ type Options struct {
 	YubiAuth   *yubigo.YubiAuth
 	Helper     Handler
 	LDAPHelper LDAPOpsHelper
+	Monitor    monitoring.MonitorInterface
+	Tracer     trace.Tracer
 }
 
 // newOptions initializes the available default options.
@@ -98,5 +103,19 @@ func Helper(val Handler) Option {
 func LDAPHelper(val LDAPOpsHelper) Option {
 	return func(o *Options) {
 		o.LDAPHelper = val
+	}
+}
+
+// Monitor provides a function to set the monitor option.
+func Monitor(val monitoring.MonitorInterface) Option {
+	return func(o *Options) {
+		o.Monitor = val
+	}
+}
+
+// Tracer provides a function to set the tracer option.
+func Tracer(val trace.Tracer) Option {
+	return func(o *Options) {
+		o.Tracer = val
 	}
 }

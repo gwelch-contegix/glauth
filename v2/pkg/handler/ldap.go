@@ -1,11 +1,11 @@
 package handler
 
 import (
+	"context"
 	"crypto/sha256"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"github.com/rs/zerolog"
 	"net"
 	"net/url"
 	"os"
@@ -15,9 +15,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel/trace"
+
+	"github.com/go-ldap/ldap/v3"
+	"github.com/gwelch-contegix/glauth/v2/internal/monitoring"
 	"github.com/gwelch-contegix/glauth/v2/pkg/config"
 	"github.com/gwelch-contegix/glauth/v2/pkg/stats"
-	"github.com/go-ldap/ldap/v3"
 	"github.com/gwelch-contegix/ldaps"
 	"github.com/pquerna/otp/totp"
 )
@@ -35,6 +39,9 @@ type ldapHandler struct {
 	servers  []ldapBackend
 	helper   Handler
 	attm     *regexp.Regexp
+
+	monitor monitoring.MonitorInterface
+	tracer  trace.Tracer
 }
 
 // global lock for ldapHandler sessions & servers manipulation
@@ -72,6 +79,8 @@ func NewLdapHandler(opts ...Option) Handler {
 		helper:   options.Helper,
 		lock:     &ldaplock,
 		attm:     ldapattributematcher,
+		monitor:  options.Monitor,
+		tracer:   options.Tracer,
 	}
 	// parse LDAP URLs
 	for _, ldapurl := range handler.backend.Servers {
@@ -90,6 +99,17 @@ func NewLdapHandler(opts ...Option) Handler {
 }
 
 func (h ldapHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (resultCode uint16, err error) {
+	ctx, span := h.tracer.Start(context.Background(), "handler.ldapHandler.Bind")
+	defer span.End()
+
+	start := time.Now()
+	defer func() {
+		h.monitor.SetResponseTimeMetric(
+			map[string]string{"operation": "bind", "status": fmt.Sprintf("%v", resultCode)},
+			time.Since(start).Seconds(),
+		)
+	}()
+
 	h.log.Debug().Str("binddn", bindDN).Str("src", conn.RemoteAddr().String()).Msg("Bind request")
 
 	//	if h.helper != nil {
@@ -108,7 +128,7 @@ func (h ldapHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (resultCod
 		user := config.User{}
 		found := false
 		for i, handler := range h.handlers.Handlers {
-			found, user, _ = handler.FindUser(userName, false)
+			found, user, _ = handler.FindUser(ctx, userName, false)
 			if found {
 				break
 			}
@@ -155,6 +175,17 @@ func (h ldapHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (resultCod
 }
 
 func (h ldapHandler) Search(boundDN string, searchReq ldap.SearchRequest, conn net.Conn) (result ldaps.ServerSearchResult, err error) {
+	ctx, span := h.tracer.Start(context.Background(), "handler.ldapHandler.Search")
+	defer span.End()
+
+	start := time.Now()
+	defer func() {
+		h.monitor.SetResponseTimeMetric(
+			map[string]string{"operation": "search", "status": fmt.Sprintf("%v", result.ResultCode)},
+			time.Since(start).Seconds(),
+		)
+	}()
+
 	wantAttributes := true
 	wantTypesOnly := false
 
@@ -234,7 +265,7 @@ func (h ldapHandler) Search(boundDN string, searchReq ldap.SearchRequest, conn n
 		h.log.Debug().Str("type", "Root search detected").Msg("AP: Search Info")
 	}
 
-	filters := h.buildReqAttributesList(searchReq.Filter, []string{})
+	filters := h.buildReqAttributesList(ctx, searchReq.Filter, []string{})
 
 	for _, filter := range filters {
 		attbits := h.attm.FindStringSubmatch(filter)
@@ -273,7 +304,10 @@ func (h ldapHandler) Search(boundDN string, searchReq ldap.SearchRequest, conn n
 	return ssr, nil
 }
 
-func (h ldapHandler) buildReqAttributesList(filter string, filters []string) []string {
+func (h ldapHandler) buildReqAttributesList(ctx context.Context, filter string, filters []string) []string {
+	ctx, span := h.tracer.Start(ctx, "handler.ldapHandler.buildReqAttributesList")
+	defer span.End()
+
 	maxp := len(filter)
 	start := -1
 	descended := false
@@ -285,7 +319,7 @@ func (h ldapHandler) buildReqAttributesList(filter string, filters []string) []s
 		} else if c == ')' {
 			if start > -1 {
 				descended = true
-				filters = h.buildReqAttributesList(filter[start:p], filters)
+				filters = h.buildReqAttributesList(ctx, filter[start:p], filters)
 			}
 			start = -1
 		}
@@ -297,25 +331,60 @@ func (h ldapHandler) buildReqAttributesList(filter string, filters []string) []s
 }
 
 // Add is not yet supported for the ldap backend
-func (h ldapHandler) Add(boundDN string, req ldap.AddRequest, conn net.Conn) (result uint16, err error) {
+func (h ldapHandler) Add(boundDN string, req ldap.AddRequest, conn net.Conn) (resultCode uint16, err error) {
+	_, span := h.tracer.Start(context.Background(), "handler.ldapHandler.Add")
+	defer span.End()
+
+	start := time.Now()
+	defer func() {
+		h.monitor.SetResponseTimeMetric(
+			map[string]string{"operation": "add", "status": fmt.Sprintf("%v", resultCode)},
+			time.Since(start).Seconds(),
+		)
+	}()
 	return ldap.LDAPResultInsufficientAccessRights, nil
 }
 
 // Modify is not yet supported for the ldap backend
-func (h ldapHandler) Modify(boundDN string, req ldap.ModifyRequest, conn net.Conn) (result uint16, err error) {
+func (h ldapHandler) Modify(boundDN string, req ldap.ModifyRequest, conn net.Conn) (resultCode uint16, err error) {
+	_, span := h.tracer.Start(context.Background(), "handler.ldapHandler.Modify")
+	defer span.End()
+
+	start := time.Now()
+	defer func() {
+		h.monitor.SetResponseTimeMetric(
+			map[string]string{"operation": "modify", "status": fmt.Sprintf("%v", resultCode)},
+			time.Since(start).Seconds(),
+		)
+	}()
 	return ldap.LDAPResultInsufficientAccessRights, nil
 }
 
 // Delete is not yet supported for the ldap backend
-func (h ldapHandler) Delete(boundDN string, deleteDN string, conn net.Conn) (result uint16, err error) {
+func (h ldapHandler) Delete(boundDN string, deleteDN string, conn net.Conn) (resultCode uint16, err error) {
+	_, span := h.tracer.Start(context.Background(), "handler.ldapHandler.Delete")
+	defer span.End()
+
+	start := time.Now()
+	defer func() {
+		h.monitor.SetResponseTimeMetric(
+			map[string]string{"operation": "delete", "status": fmt.Sprintf("%v", resultCode)},
+			time.Since(start).Seconds(),
+		)
+	}()
 	return ldap.LDAPResultInsufficientAccessRights, nil
 }
 
-func (h ldapHandler) FindUser(userName string, searchByUPN bool) (found bool, user config.User, err error) {
+func (h ldapHandler) FindUser(ctx context.Context, userName string, searchByUPN bool) (found bool, user config.User, err error) {
+	ctx, span := h.tracer.Start(ctx, "handler.ldapHandler.FindUser")
+	defer span.End()
 	return false, config.User{}, nil
 }
 
-func (h ldapHandler) FindGroup(groupName string) (found bool, group config.Group, err error) {
+func (h ldapHandler) FindGroup(ctx context.Context, groupName string) (found bool, group config.Group, err error) {
+	ctx, span := h.tracer.Start(ctx, "handler.ldapHandler.FindGroup")
+	defer span.End()
+
 	return false, config.Group{}, nil
 }
 
