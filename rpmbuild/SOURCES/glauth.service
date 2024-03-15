@@ -1,0 +1,31 @@
+[Unit]
+Description=Keycloak ldap-proxy Server
+After=syslog.target network.target keycloak.service
+
+[Service]
+DynamicUser=yes
+SuccessExitStatus=0
+ExecStart=/usr/bin/glauth -c /etc/glauth.cfg
+PrivateTmp=yes
+#PrivateUsers=yes
+NoNewPrivileges=yes
+RemoveIPC=yes
+MemoryDenyWriteExecute=yes
+RestrictNamespaces=yes
+IPAddressAllow=127.0.0.1 10.121.0.0/16
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+PrivateDevices=yes
+RestrictSUIDSGID=yes
+ProtectSystem=strict
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+ProtectHome=yes
+LockPersonality=yes
+RestrictRealtime=yes
+SystemCallFilter=@system-service
+
+EnvironmentFile=/etc/glauth.env
+
+[Install]
+WantedBy=multi-user.target
