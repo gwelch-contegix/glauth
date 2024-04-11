@@ -1,7 +1,7 @@
 FROM quay.io/centos/centos:stream8
 
 RUN dnf update -y && dnf install -y make rpmdevtools rpmlint 'dnf-command(builddep)'
-RUN dnf install -y go-srpm-macros https://mirror.stream.centos.org/9-stream/AppStream/x86_64/os/Packages/go{lang-bin,lang,-toolset}-1.21.3-5.el9.x86_64.rpm https://mirror.stream.centos.org/9-stream/AppStream/x86_64/os/Packages/golang-src-1.21.3-5.el9.noarch.rpm --allowerasing
+RUN dnf install -y go-srpm-macros go{lang-bin,lang,-toolset} --allowerasing
 
 COPY /SOURCES/go.mod /root/v2/go.mod
 # This isn't the real build but it will hopefully cache at least some of the build

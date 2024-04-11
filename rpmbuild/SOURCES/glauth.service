@@ -5,14 +5,14 @@ After=syslog.target network.target keycloak.service
 [Service]
 DynamicUser=yes
 SuccessExitStatus=0
-ExecStart=/usr/bin/glauth -c /etc/glauth.cfg
+RuntimeDirectory=%N
+ExecStartPre=+bash -c "install -o$(stat -c %%u ${RUNTIME_DIRECTORY}) /etc/glauth.cfg ${RUNTIME_DIRECTORY}/glauth.cfg"
+ExecStart=/usr/bin/glauth -c "${RUNTIME_DIRECTORY}/glauth.cfg"
 PrivateTmp=yes
-#PrivateUsers=yes
 NoNewPrivileges=yes
 RemoveIPC=yes
 MemoryDenyWriteExecute=yes
 RestrictNamespaces=yes
-IPAddressAllow=127.0.0.1 10.121.0.0/16
 ProtectKernelTunables=yes
 ProtectKernelModules=yes
 ProtectControlGroups=yes
@@ -24,7 +24,7 @@ ProtectHome=yes
 LockPersonality=yes
 RestrictRealtime=yes
 SystemCallFilter=@system-service
-RestartSec=10min
+RestartSec=1min
 Restart=on-failure
 
 EnvironmentFile=/etc/glauth.env

@@ -33,7 +33,7 @@ sed 's@/Users/gwelch/build/source/glauth/v2/bin/darwinamd64@%{_libdir}@g' pkg/pl
 rm -rf $RPM_BUILD_ROOT
 install -D -m 755 bin/%{name} %{buildroot}/%{_bindir}/%{name}
 install -D -m 755 bin/keycloak.so %{buildroot}/%{_libdir}/keycloak.so
-install -D -m 644 bin/glauth.cfg %{buildroot}/%{_sysconfdir}/glauth.cfg
+install -D -m 600 bin/glauth.cfg %{buildroot}/%{_sysconfdir}/glauth.cfg
 install -D -m 644 %{SOURCE1} %{buildroot}/%{_unitdir}/%{name}.service
 
 
