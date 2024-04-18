@@ -2,7 +2,7 @@
 
 Name:           glauth
 Version:        3.4.8
-Release:        61%{?dist}
+Release:        66%{?dist}
 Summary:        glauth
 
 License:        MIT

@@ -1,9 +1,12 @@
 package server
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
+	"net"
 	"plugin"
+	"time"
 
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel/trace"
@@ -13,6 +16,7 @@ import (
 	"github.com/gwelch-contegix/glauth/v2/pkg/config"
 	"github.com/gwelch-contegix/glauth/v2/pkg/handler"
 	"github.com/gwelch-contegix/ldaps"
+	proxyproto "github.com/pires/go-proxyproto"
 )
 
 type LdapSvc struct {
@@ -181,17 +185,50 @@ func NewServer(opts ...Option) (*LdapSvc, error) {
 // ListenAndServe listens on the TCP network address s.c.LDAP.Listen
 func (s *LdapSvc) ListenAndServe() error {
 	s.log.Info().Str("address", s.c.LDAP.Listen).Msg("LDAP server listening")
-	return s.l.ListenAndServe(s.c.LDAP.Listen)
+
+	ln, err := net.Listen("tcp", s.c.LDAP.Listen)
+	if err != nil {
+		return err
+	}
+	ln = &proxyproto.Listener{
+		Listener:          ln,
+		ReadHeaderTimeout: 2 * time.Second,
+	}
+	defer ln.Close()
+	return s.l.Serve(ln)
 }
 
 // ListenAndServeTLS listens on the TCP network address s.c.LDAPS.Listen
 func (s *LdapSvc) ListenAndServeTLS() error {
 	s.log.Info().Str("address", s.c.LDAPS.Listen).Msg("LDAPS server listening")
-	return s.l.ListenAndServeTLS(
-		s.c.LDAPS.Listen,
-		s.c.LDAPS.Cert,
-		s.c.LDAPS.Key,
-	)
+
+	cert, err := tls.LoadX509KeyPair(s.c.LDAPS.Cert, s.c.LDAPS.Key)
+	if err != nil {
+		return err
+	}
+	tlsConfig := tls.Config{
+		Certificates: []tls.Certificate{cert},
+		MinVersion:   tls.VersionTLS12,
+		CipherSuites: []uint16{
+			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
+			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
+		},
+	}
+	tlsConfig.ServerName = "localhost"
+	ln, err := tls.Listen("tcp", s.c.LDAPS.Listen, &tlsConfig)
+	if err != nil {
+		return err
+	}
+	ln = &proxyproto.Listener{
+		Listener:          ln,
+		ReadHeaderTimeout: 2 * time.Second,
+	}
+	defer ln.Close()
+	return s.l.Serve(ln)
 }
 
 // Shutdown ends listeners by closing the ldap server quit channel

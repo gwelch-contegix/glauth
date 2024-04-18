@@ -11,6 +11,7 @@ require (
 	github.com/go-ldap/ldap/v3 v3.4.6
 	github.com/gwelch-contegix/ldaps v0.0.0-20240105121643-5b90c6e9c11d
 	github.com/jinzhu/copier v0.4.0
+	github.com/pires/go-proxyproto v0.7.0
 	github.com/pquerna/otp v1.4.0
 	github.com/prometheus/client_golang v1.19.0
 	github.com/prometheus/client_model v0.6.0
