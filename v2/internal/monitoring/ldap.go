@@ -22,8 +22,6 @@ func (m *LDAPMonitorWatcher) sync() {
 		case tick := <-m.syncTicker.C:
 			m.logger.Debug().Int("Num GoRoutines", runtime.NumGoroutine()).Time("value", tick).Msg("Tick")
 			m.storeMetrics()
-		default:
-			continue
 		}
 	}
 }

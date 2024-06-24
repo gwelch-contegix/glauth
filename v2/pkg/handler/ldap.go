@@ -211,6 +211,20 @@ func (h ldapHandler) Search(boundDN string, searchReq ldap.SearchRequest, conn n
 		stats.Frontend.Add("search_ldapSession_errors", 1)
 		return ldaps.ServerSearchResult{ResultCode: ldap.LDAPResultOperationsError}, nil
 	}
+	/*
+	   delete_idx := -1
+	   pagingSize := uint32(0)
+	   for idx, control := range searchReq.Controls {
+	       if control.GetControlType() == ldap.ControlTypePaging {
+	           fmt.Println(control.GetControlType())
+	           pagingSize = control.(*ldap.ControlPaging).PagingSize
+	           delete_idx = idx
+	       }
+	   }
+	   if delete_idx >= 0 {
+	       searchReq.Controls = append(searchReq.Controls[:delete_idx], searchReq.Controls[delete_idx+1:]...)
+	   }
+	*/
 	search := ldap.NewSearchRequest(
 		searchReq.BaseDN,
 		searchReq.Scope,
@@ -224,6 +238,15 @@ func (h ldapHandler) Search(boundDN string, searchReq ldap.SearchRequest, conn n
 	)
 
 	h.log.Debug().Interface("request", search).Msg("Search request to backend")
+	/*
+			var sr *ldap.SearchResult
+			if pagingSize > 0 {
+			    fmt.Printf("Searching with page size == %d\n", pagingSize)
+		        sr, err = s.ldap.SearchWithPaging(search, pagingSize)
+		    } else {
+		        sr, err = s.ldap.Search(search)
+		    }
+	*/
 	sr, err := s.ldap.Search(search)
 	h.log.Debug().Interface("result", sr).Msg("Backend Search result")
 
@@ -287,9 +310,10 @@ func (h ldapHandler) Search(boundDN string, searchReq ldap.SearchRequest, conn n
 	}
 
 	ssr := ldaps.ServerSearchResult{
-		Entries:   sr.Entries,
-		Referrals: sr.Referrals,
-		Controls:  sr.Controls,
+		Entries:    sr.Entries,
+		Referrals:  sr.Referrals,
+		Controls:   sr.Controls,
+		ResultCode: ldap.LDAPResultSuccess,
 	}
 	h.log.Debug().Interface("result", ssr).Msg("Frontend Search result")
 	if err != nil {
