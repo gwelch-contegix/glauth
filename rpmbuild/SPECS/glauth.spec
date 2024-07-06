@@ -2,7 +2,7 @@
 
 Name:           glauth
 Version:        3.4.8
-Release:        80%{?dist}
+Release:        82%{?dist}
 Summary:        glauth
 
 License:        MIT
@@ -23,8 +23,8 @@ glauth
 
 
 %build
-make releasemain
 make M=pkg/plugins/glauth-keycloak pull-plugin-dependencies
+make releasemain
 make P=keycloak M=pkg/plugins/glauth-keycloak releaseplugin
 sed 's@/Users/gwelch/build/source/glauth/v2/bin/darwinamd64@%{_libdir}@g' pkg/plugins/glauth-keycloak/sample-keycloak.cfg >bin/glauth.cfg
 
