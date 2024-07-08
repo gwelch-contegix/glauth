@@ -41,7 +41,7 @@ olcAttributeTypes: {11}( 1.3.6.1.4.1.47732.1.1.2.4 NAME 'kopanoSendAsPrivile
  IgnoreMatch SUBSTR caseIgnoreSubstringsMatch SYNTAX 1.3.6.1.4.1.1466.115.12
  1.1.15 )
 olcAttributeTypes: {12}( 1.3.6.1.4.1.47732.1.1.2.5 NAME 'kopanoMrAccept' DES
- C 'KOPANO: user should auto-accept meeting requests' EQUALITY integerMatch 
+ C 'KOPANO: user should auto-accept meeting requests' EQUALITY integerMatch
  SYNTAX 1.3.6.1.4.1.1466.115.121.1.27 SINGLE-VALUE )
 olcAttributeTypes: {13}( 1.3.6.1.4.1.47732.1.1.2.6 NAME 'kopanoMrDeclineConf
  lict' DESC 'KOPANO: user should automatically decline conflicting meeting r
@@ -95,7 +95,7 @@ olcAttributeTypes: {27}( 1.3.6.1.4.1.47732.1.3.2.5 NAME 'kopanoAdminPrivileg
  e' DESC 'KOPANO: Users from different companies which are administrator ove
  r selected company' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstringsMat
  ch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 )
-olcAttributeTypes: {28}( 1.3.6.1.4.1.47732.1.3.2.6 NAME 'kopanoSystemAdmin' 
+olcAttributeTypes: {28}( 1.3.6.1.4.1.47732.1.3.2.6 NAME 'kopanoSystemAdmin'
  DESC 'KOPANO: The user who is the system administrator for this company' EQ
  UALITY caseIgnoreMatch SUBSTR caseIgnoreSubstringsMatch SYNTAX 1.3.6.1.4.1.
  1466.115.121.1.15 SINGLE-VALUE )
@@ -108,7 +108,7 @@ olcAttributeTypes: {30}( 1.3.6.1.4.1.47732.1.3.1.6 NAME 'kopanoQuotaCompanyW
   when a company exceeds its quota' EQUALITY caseIgnoreMatch SUBSTR caseIgno
  reSubstringsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 )
 olcAttributeTypes: {31}( 1.3.6.1.4.1.47732.1.3.4.1 NAME 'kopanoCompanyServer
- ' DESC 'KOPANO: Home server for the public folders for a company' EQUALITY 
+ ' DESC 'KOPANO: Home server for the public folders for a company' EQUALITY
  caseIgnoreMatch SUBSTR caseIgnoreSubstringsMatch SYNTAX 1.3.6.1.4.1.1466.11
  5.121.1.15 SINGLE-VALUE )
 olcAttributeTypes: {32}( 1.3.6.1.4.1.47732.1.4.4.1 NAME 'kopanoHttpPort' DES
@@ -125,10 +125,10 @@ olcAttributeTypes: {35}( 1.3.6.1.4.1.47732.1.4.4.4 NAME 'kopanoContainsPubli
  c' DESC 'KOPANO: This server contains the public store' EQUALITY integerMat
  ch SYNTAX 1.3.6.1.4.1.1466.115.121.1.27 SINGLE-VALUE )
 olcAttributeTypes: {36}( 1.3.6.1.4.1.47732.1.4.4.6 NAME 'kopanoProxyURL' DES
- C 'KOPANO: Full proxy URL for this server' EQUALITY caseIgnoreMatch SUBSTR 
+ C 'KOPANO: Full proxy URL for this server' EQUALITY caseIgnoreMatch SUBSTR
  caseIgnoreSubstringsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE
   )
-olcAttributeTypes: {37}( 1.3.6.1.4.1.47732.1.5.5.1 NAME 'kopanoFilter' DESC 
+olcAttributeTypes: {37}( 1.3.6.1.4.1.47732.1.5.5.1 NAME 'kopanoFilter' DESC
  'KOPANO: LDAP Filter to apply' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSu
  bstringsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
 olcAttributeTypes: {38}( 1.3.6.1.4.1.47732.1.5.5.2 NAME 'kopanoBase' DESC 'K
@@ -141,14 +141,14 @@ olcObjectClasses: {0}( 1.3.6.1.4.1.47732.1.1.0.0 NAME 'kopano-user' DESC 'KO
  ourceCapacity $ kopanoAccount $ kopanoHidden $ kopanoAliases $ kopanoUserSe
  rver $ kopanoEnabledFeatures $ kopanoDisabledFeatures $ kopanoUserArchiveSe
  rvers $ kopanoUserArchiveCouplings $ uidNumber ) )
-olcObjectClasses: {1}( 1.3.6.1.4.1.47732.1.6.0.0 NAME 'kopano-contact' DESC 
+olcObjectClasses: {1}( 1.3.6.1.4.1.47732.1.6.0.0 NAME 'kopano-contact' DESC
  'KOPANO: a contact of Kopano' SUP top AUXILIARY MUST ( cn $ uidNumber ) MAY
   ( kopanoSendAsPrivilege $ kopanoHidden $ kopanoAliases $ kopanoAccount ) )
 olcObjectClasses: {2}( 1.3.6.1.4.1.47732.1.2.0.0 NAME 'kopano-group' DESC 'K
  OPANO: a group of Kopano' SUP top AUXILIARY MUST cn MAY ( kopanoAccount $ k
  opanoHidden $ mail $ kopanoAliases $ kopanoSecurityGroup $ kopanoSendAsPriv
  ilege $ gidNumber ) )
-olcObjectClasses: {3}( 1.3.6.1.4.1.47732.1.3.0.0 NAME 'kopano-company' DESC 
+olcObjectClasses: {3}( 1.3.6.1.4.1.47732.1.3.0.0 NAME 'kopano-company' DESC
  'KOPANO: a company of Kopano' SUP top AUXILIARY MUST ou MAY ( kopanoAccount
   $ kopanoHidden $ kopanoViewPrivilege $ kopanoAdminPrivilege $ kopanoSystem
  Admin $ kopanoQuotaOverride $ kopanoQuotaWarn $ kopanoUserDefaultQuotaOverr
@@ -162,7 +162,7 @@ olcObjectClasses: {4}( 1.3.6.1.4.1.47732.1.4.0.0 NAME 'kopano-server' DESC '
 olcObjectClasses: {5}( 1.3.6.1.4.1.47732.1.5.0.0 NAME 'kopano-addresslist' D
  ESC 'KOPANO: a Kopano Addresslist' SUP top STRUCTURAL MUST cn MAY ( kopanoA
  ccount $ kopanoHidden $ kopanoFilter $ kopanoBase ) )
-olcObjectClasses: {6}( 1.3.6.1.4.1.47732.1.7.0.0 NAME 'kopano-dynamicgroup' 
+olcObjectClasses: {6}( 1.3.6.1.4.1.47732.1.7.0.0 NAME 'kopano-dynamicgroup'
  DESC 'KOPANO: a Kopano dynamic group' SUP top STRUCTURAL MUST cn MAY ( kopa
  noAccount $ kopanoHidden $ mail $ kopanoAliases $ kopanoFilter $ kopanoBase
   ) )

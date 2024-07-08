@@ -67,7 +67,7 @@ func NewServer(opts ...Option) (*LdapSvc, error) {
 		case "plugin":
 			plug, err := plugin.Open(s.c.Helper.Plugin)
 			if err != nil {
-				return nil, errors.New(fmt.Sprintf("Unable to load specified helper plugin: %s", err))
+				return nil, fmt.Errorf("Unable to load specified helper plugin: %s", err)
 			}
 			nph, err := plug.Lookup(s.c.Helper.PluginHandler)
 			if err != nil {
@@ -137,7 +137,7 @@ func NewServer(opts ...Option) (*LdapSvc, error) {
 		case "plugin":
 			plug, err := plugin.Open(backend.Plugin)
 			if err != nil {
-				return nil, errors.New(fmt.Sprintf("Unable to load specified backend plugin: %s", err))
+				return nil, fmt.Errorf("Unable to load specified backend plugin: %s", err)
 			}
 			nph, err := plug.Lookup(backend.PluginHandler)
 			if err != nil {

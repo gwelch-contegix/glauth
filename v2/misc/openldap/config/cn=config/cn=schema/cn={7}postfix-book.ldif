@@ -27,7 +27,7 @@ olcAttributeTypes: {6}( 1.3.6.1.4.1.29426.1.10.7 NAME 'mailQuota' DESC 'Mail
 olcAttributeTypes: {7}( 1.3.6.1.4.1.29426.1.10.8 NAME 'mailStorageDirectory'
   DESC 'The absolute path to the mail users mailbox' EQUALITY caseExactIA5Ma
  tch SYNTAX 1.3.6.1.4.1.1466.115.121.1.26 SINGLE-VALUE )
-olcAttributeTypes: {8}( 1.3.6.1.4.1.29426.1.10.9 NAME 'mailSieveRuleSource' 
+olcAttributeTypes: {8}( 1.3.6.1.4.1.29426.1.10.9 NAME 'mailSieveRuleSource'
  DESC 'Sun ONE Messaging Server defined attribute' SYNTAX 1.3.6.1.4.1.1466.1
  15.121.1.26 X-ORIGIN 'Sun ONE Messaging Server' )
 olcAttributeTypes: {9}( 1.3.6.1.4.1.29426.1.10.10 NAME 'mailForwardingAddres

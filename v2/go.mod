@@ -9,7 +9,7 @@ require (
 	github.com/docopt/docopt-go v0.0.0-20180111231733-ee0de3bc6815
 	github.com/fsnotify/fsnotify v1.7.0
 	github.com/go-ldap/ldap/v3 v3.4.8
-	github.com/gwelch-contegix/ldaps v0.0.0-20240705213502-033066d95ef4
+	github.com/gwelch-contegix/ldaps v0.0.0-20240708224456-62fd544757a8
 	github.com/jinzhu/copier v0.4.0
 	github.com/pires/go-proxyproto v0.7.0
 	github.com/pquerna/otp v1.4.0

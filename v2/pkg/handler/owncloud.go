@@ -69,11 +69,11 @@ func NewOwnCloudHandler(opts ...Option) Handler {
 	}
 }
 
-func (h ownCloudHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (resultCode uint16, err error) {
+func (h ownCloudHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (r *ldap.SimpleBindResult, err error) {
 	start := time.Now()
 	defer func() {
 		h.monitor.SetResponseTimeMetric(
-			map[string]string{"operation": "bind", "status": fmt.Sprintf("%v", resultCode)},
+			map[string]string{"operation": "bind", "status": fmt.Sprintf("%v", StatusCode(err))},
 			time.Since(start).Seconds(),
 		)
 	}()
@@ -88,19 +88,19 @@ func (h ownCloudHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (resul
 	// parse the bindDN - ensure that the bindDN ends with the BaseDN
 	if !strings.HasSuffix(bindDN, baseDN) {
 		h.log.Warn().Str("binddn", bindDN).Str("basedn", h.backend.BaseDN).Msg("BindDN not part of our BaseDN")
-		return ldap.LDAPResultInvalidCredentials, nil
+		return nil, ldap.NewError(ldap.LDAPResultInvalidCredentials, errors.New(""))
 	}
 	parts := strings.Split(strings.TrimSuffix(bindDN, baseDN), ",")
 	if len(parts) > 2 {
 		h.log.Warn().Str("binddn", bindDN).Int("numparts", len(parts)).Msg("BindDN should have only one or two parts")
-		return ldap.LDAPResultInvalidCredentials, nil
+		return nil, ldap.NewError(ldap.LDAPResultInvalidCredentials, errors.New(""))
 	}
 	userName := strings.TrimPrefix(parts[0], "cn=")
 
 	// try to login
 	if !h.login(userName, bindSimplePw) {
 		h.log.Warn().Str("username", userName).Str("basedn", h.backend.BaseDN).Msg("Login failed")
-		return ldap.LDAPResultInvalidCredentials, nil
+		return nil, ldap.NewError(ldap.LDAPResultInvalidCredentials, errors.New(""))
 	}
 
 	// TODO reuse HTTP connection
@@ -119,14 +119,14 @@ func (h ownCloudHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (resul
 
 	stats.Frontend.Add("bind_successes", 1)
 	h.log.Debug().Str("binddn", bindDN).Str("basedn", h.backend.BaseDN).Str("src", conn.RemoteAddr().String()).Msg("Bind success")
-	return ldap.LDAPResultSuccess, nil
+	return nil, nil
 }
 
-func (h ownCloudHandler) Search(bindDN string, searchReq ldap.SearchRequest, conn net.Conn) (result ldaps.ServerSearchResult, err error) {
+func (h ownCloudHandler) Search(bindDN string, searchReq ldap.SearchRequest, conn net.Conn) (result *ldap.SearchResult, err error) {
 	start := time.Now()
 	defer func() {
 		h.monitor.SetResponseTimeMetric(
-			map[string]string{"operation": "search", "status": fmt.Sprintf("%v", result.ResultCode)},
+			map[string]string{"operation": "search", "status": fmt.Sprintf("%v", StatusCode(err))},
 			time.Since(start).Seconds(),
 		)
 	}()
@@ -139,19 +139,19 @@ func (h ownCloudHandler) Search(bindDN string, searchReq ldap.SearchRequest, con
 
 	// validate the user is authenticated and has appropriate access
 	if len(bindDN) < 1 {
-		return ldaps.ServerSearchResult{ResultCode: ldap.LDAPResultInsufficientAccessRights}, fmt.Errorf("search error: Anonymous BindDN not allowed %s", bindDN)
+		return nil, ldap.NewError(ldap.LDAPResultInsufficientAccessRights, fmt.Errorf("search error: Anonymous BindDN not allowed %s", bindDN))
 	}
 	if !strings.HasSuffix(bindDN, baseDN) {
-		return ldaps.ServerSearchResult{ResultCode: ldap.LDAPResultInsufficientAccessRights}, fmt.Errorf("search error: BindDN %s not in our BaseDN %s", bindDN, h.backend.BaseDN)
+		return nil, ldap.NewError(ldap.LDAPResultInsufficientAccessRights, fmt.Errorf("search error: BindDN %s not in our BaseDN %s", bindDN, h.backend.BaseDN))
 	}
 	if !strings.HasSuffix(searchBaseDN, h.backend.BaseDN) {
-		return ldaps.ServerSearchResult{ResultCode: ldap.LDAPResultInsufficientAccessRights}, fmt.Errorf("search error: search BaseDN %s is not in our BaseDN %s", searchBaseDN, h.backend.BaseDN)
+		return nil, ldap.NewError(ldap.LDAPResultInsufficientAccessRights, fmt.Errorf("search error: search BaseDN %s is not in our BaseDN %s", searchBaseDN, h.backend.BaseDN))
 	}
 	// return all users in the config file - the LDAP library will filter results for us
 	entries := []*ldap.Entry{}
 	filterEntity, err := ldaps.GetFilterAttribute(searchReq.Filter, "objectclass")
 	if err != nil {
-		return ldaps.ServerSearchResult{ResultCode: ldap.LDAPResultOperationsError}, fmt.Errorf("search error: error parsing filter: %s", searchReq.Filter)
+		return nil, ldap.NewError(ldap.LDAPResultOperationsError, fmt.Errorf("search error: error parsing filter: %s", searchReq.Filter))
 	}
 	h.lock.Lock()
 	id := connID(conn)
@@ -160,11 +160,11 @@ func (h ownCloudHandler) Search(bindDN string, searchReq ldap.SearchRequest, con
 
 	switch filterEntity {
 	default:
-		return ldaps.ServerSearchResult{ResultCode: ldap.LDAPResultOperationsError}, fmt.Errorf("search error: unhandled filter type: %s [%s]", filterEntity, searchReq.Filter)
+		return nil, ldap.NewError(ldap.LDAPResultOperationsError, fmt.Errorf("search error: unhandled filter type: %s [%s]", filterEntity, searchReq.Filter))
 	case "posixgroup":
 		groups, err := session.getGroups()
 		if err != nil {
-			return ldaps.ServerSearchResult{ResultCode: ldap.LDAPResultOperationsError}, errors.New("search error: error getting groups")
+			return nil, errors.New("search error: error getting groups")
 		}
 		for _, g := range groups {
 			attrs := []*ldap.EntryAttribute{}
@@ -194,7 +194,7 @@ func (h ownCloudHandler) Search(bindDN string, searchReq ldap.SearchRequest, con
 		users, err := session.getUsers(userName)
 		if err != nil {
 			h.log.Debug().Str("username", userName).Err(err).Msg("Could not get user")
-			return ldaps.ServerSearchResult{ResultCode: ldap.LDAPResultOperationsError}, errors.New("search error: error getting users")
+			return nil, errors.New("search error: error getting users")
 		}
 		for _, u := range users {
 			attrs := []*ldap.EntryAttribute{}
@@ -216,46 +216,46 @@ func (h ownCloudHandler) Search(bindDN string, searchReq ldap.SearchRequest, con
 	}
 	stats.Frontend.Add("search_successes", 1)
 	h.log.Debug().Str("filter", searchReq.Filter).Msg("AP: Search OK")
-	return ldaps.ServerSearchResult{Entries: entries, Referrals: []string{}, Controls: []ldap.Control{}, ResultCode: ldap.LDAPResultSuccess}, nil
+	return &ldap.SearchResult{Entries: entries, Referrals: []string{}, Controls: []ldap.Control{}}, nil
 }
 
 // Add is not yet supported for the owncloud backend
-func (h ownCloudHandler) Add(boundDN string, req ldap.AddRequest, conn net.Conn) (resultCode uint16, err error) {
+func (h ownCloudHandler) Add(boundDN string, req ldap.AddRequest, conn net.Conn) (err error) {
 	start := time.Now()
 	defer func() {
 		h.monitor.SetResponseTimeMetric(
-			map[string]string{"operation": "add", "status": fmt.Sprintf("%v", resultCode)},
+			map[string]string{"operation": "add", "status": fmt.Sprintf("%v", StatusCode(err))},
 			time.Since(start).Seconds(),
 		)
 	}()
-	return ldap.LDAPResultInsufficientAccessRights, nil
+	return ldap.NewError(ldap.LDAPResultInsufficientAccessRights, errors.New(""))
 }
 
 // Modify is not yet supported for the owncloud backend
-func (h ownCloudHandler) Modify(boundDN string, req ldap.ModifyRequest, conn net.Conn) (resultCode uint16, err error) {
+func (h ownCloudHandler) Modify(boundDN string, req ldap.ModifyRequest, conn net.Conn) (result *ldap.ModifyResult, err error) {
 	start := time.Now()
 	defer func() {
 		h.monitor.SetResponseTimeMetric(
-			map[string]string{"operation": "modify", "status": fmt.Sprintf("%v", resultCode)},
+			map[string]string{"operation": "modify", "status": fmt.Sprintf("%v", StatusCode(err))},
 			time.Since(start).Seconds(),
 		)
 	}()
-	return ldap.LDAPResultInsufficientAccessRights, nil
+	return nil, ldap.NewError(ldap.LDAPResultInsufficientAccessRights, errors.New(""))
 }
 
 // Delete is not yet supported for the owncloud backend
-func (h ownCloudHandler) Delete(boundDN string, deleteDN string, conn net.Conn) (resultCode uint16, err error) {
+func (h ownCloudHandler) Delete(boundDN string, deleteDN string, conn net.Conn) (err error) {
 	_, span := h.tracer.Start(context.Background(), "handler.configHandler.Delete")
 	defer span.End()
 
 	start := time.Now()
 	defer func() {
 		h.monitor.SetResponseTimeMetric(
-			map[string]string{"operation": "delete", "status": fmt.Sprintf("%v", resultCode)},
+			map[string]string{"operation": "delete", "status": fmt.Sprintf("%v", StatusCode(err))},
 			time.Since(start).Seconds(),
 		)
 	}()
-	return ldap.LDAPResultInsufficientAccessRights, nil
+	return ldap.NewError(ldap.LDAPResultInsufficientAccessRights, errors.New(""))
 }
 
 // FindUser with the given username. Called by the ldap backend to authenticate the bind. Optional
@@ -273,14 +273,13 @@ func (h ownCloudHandler) FindGroup(ctx context.Context, groupName string) (found
 	return false, config.Group{}, nil
 }
 
-func (h ownCloudHandler) Close(boundDN string, conn net.Conn) error {
+func (h ownCloudHandler) Close(boundDN string, conn net.Conn) {
 	conn.Close() // close connection to the server when then client is closed
 	h.lock.Lock()
 	defer h.lock.Unlock()
 	delete(h.sessions, connID(conn))
 	stats.Frontend.Add("closes", 1)
 	stats.Backend.Add("closes", 1)
-	return nil
 }
 
 func (h ownCloudHandler) login(name, pw string) bool {

@@ -110,4 +110,3 @@ For advanced users, GLAuth supports pluggable backends.  Currently, it can use a
 # Stargazers over time
 
 [![Stargazers over time](https://starchart.cc/glauth/glauth.svg)](https://starchart.cc/glauth/glauth)
-

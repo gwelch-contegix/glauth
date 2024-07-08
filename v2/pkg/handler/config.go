@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"regexp"
@@ -17,7 +18,6 @@ import (
 	"github.com/gwelch-contegix/glauth/v2/internal/monitoring"
 	"github.com/gwelch-contegix/glauth/v2/pkg/config"
 	"github.com/gwelch-contegix/glauth/v2/pkg/stats"
-	"github.com/gwelch-contegix/ldaps"
 )
 
 type configHandler struct {
@@ -63,82 +63,51 @@ func (h configHandler) GetYubikeyAuth() *yubigo.YubiAuth {
 }
 
 // Bind implements a bind request against the config file
-func (h configHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (resultCode uint16, err error) {
+func (h configHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (*ldap.SimpleBindResult, error) {
 	ctx, span := h.tracer.Start(context.Background(), "handler.configHandler.Bind")
 	defer span.End()
 
 	start := time.Now()
-	defer func() {
-		h.monitor.SetResponseTimeMetric(
-			map[string]string{"operation": "bind", "status": fmt.Sprintf("%v", resultCode)},
-			time.Since(start).Seconds(),
-		)
-	}()
-	return h.ldohelper.Bind(ctx, h, bindDN, bindSimplePw, conn)
+	_, err := h.ldohelper.Bind(ctx, h, bindDN, bindSimplePw, conn)
+
+	h.monitor.SetResponseTimeMetric(
+		map[string]string{"operation": "bind", "status": fmt.Sprintf("%v", StatusCode(err))},
+		time.Since(start).Seconds(),
+	)
+	return nil, err
 }
 
 // Search implements a search request against the config file
-func (h configHandler) Search(bindDN string, searchReq ldap.SearchRequest, conn net.Conn) (result ldaps.ServerSearchResult, err error) {
+func (h configHandler) Search(bindDN string, searchReq ldap.SearchRequest, conn net.Conn) (*ldap.SearchResult, error) {
 	ctx, span := h.tracer.Start(context.Background(), "handler.configHandler.Search")
 	defer span.End()
 
 	start := time.Now()
-	defer func() {
-		h.monitor.SetResponseTimeMetric(
-			map[string]string{"operation": "search", "status": fmt.Sprintf("%v", result.ResultCode)},
-			time.Since(start).Seconds(),
-		)
-	}()
-	return h.ldohelper.Search(ctx, h, bindDN, searchReq, conn)
+	result, err := h.ldohelper.Search(ctx, h, bindDN, searchReq, conn)
+	h.monitor.SetResponseTimeMetric(
+		map[string]string{"operation": "search", "status": fmt.Sprintf("%v", StatusCode(err))},
+		time.Since(start).Seconds(),
+	)
+	return result, err
 }
 
 // Add is not supported for a static config file
-func (h configHandler) Add(boundDN string, req ldap.AddRequest, conn net.Conn) (resultCode uint16, err error) {
-	_, span := h.tracer.Start(context.Background(), "handler.configHandler.Add")
-	defer span.End()
-
-	start := time.Now()
-	defer func() {
-		h.monitor.SetResponseTimeMetric(
-			map[string]string{"operation": "add", "status": fmt.Sprintf("%v", resultCode)},
-			time.Since(start).Seconds(),
-		)
-	}()
-	return ldap.LDAPResultInsufficientAccessRights, nil
+func (h configHandler) Add(boundDN string, req ldap.AddRequest, conn net.Conn) error {
+	return ldap.NewError(ldap.LDAPResultInsufficientAccessRights, errors.New(""))
 }
 
 // Modify is not supported for a static config file
-func (h configHandler) Modify(boundDN string, req ldap.ModifyRequest, conn net.Conn) (resultCode uint16, err error) {
-	_, span := h.tracer.Start(context.Background(), "handler.configHandler.Modify")
-	defer span.End()
-
-	start := time.Now()
-	defer func() {
-		h.monitor.SetResponseTimeMetric(
-			map[string]string{"operation": "modify", "status": fmt.Sprintf("%v", resultCode)},
-			time.Since(start).Seconds(),
-		)
-	}()
-	return ldap.LDAPResultInsufficientAccessRights, nil
+func (h configHandler) Modify(boundDN string, req ldap.ModifyRequest, conn net.Conn) (*ldap.ModifyResult, error) {
+	return nil, ldap.NewError(ldap.LDAPResultInsufficientAccessRights, errors.New(""))
 }
 
 // Delete is not supported for a static config file
-func (h configHandler) Delete(boundDN string, deleteDN string, conn net.Conn) (resultCode uint16, err error) {
-	_, span := h.tracer.Start(context.Background(), "handler.configHandler.Delete")
-	defer span.End()
-
-	start := time.Now()
-	defer func() {
-		h.monitor.SetResponseTimeMetric(
-			map[string]string{"operation": "delete", "status": fmt.Sprintf("%v", resultCode)},
-			time.Since(start).Seconds(),
-		)
-	}()
-	return ldap.LDAPResultInsufficientAccessRights, nil
+func (h configHandler) Delete(boundDN string, deleteDN string, conn net.Conn) error {
+	return ldap.NewError(ldap.LDAPResultInsufficientAccessRights, errors.New(""))
 }
 
 func (h configHandler) FindUser(ctx context.Context, userName string, searchByUPN bool) (f bool, u config.User, err error) {
-	ctx, span := h.tracer.Start(ctx, "handler.configHandler.FindUser")
+	_, span := h.tracer.Start(ctx, "handler.configHandler.FindUser")
 	defer span.End()
 	user := config.User{}
 	found := false
@@ -161,7 +130,7 @@ func (h configHandler) FindUser(ctx context.Context, userName string, searchByUP
 }
 
 func (h configHandler) FindGroup(ctx context.Context, groupName string) (f bool, g config.Group, err error) {
-	ctx, span := h.tracer.Start(ctx, "handler.configHandler.FindGroup")
+	_, span := h.tracer.Start(ctx, "handler.configHandler.FindGroup")
 	defer span.End()
 	// TODO Does g get erased, and above does u get erased?
 	// TODO and what about f?
@@ -223,8 +192,8 @@ func (h configHandler) FindPosixAccounts(ctx context.Context, hierarchy string) 
 			attrs = append(attrs, &ldap.EntryAttribute{Name: "homeDirectory", Values: []string{"/home/" + u.Name}})
 		}
 
-		attrs = append(attrs, &ldap.EntryAttribute{Name: "description", Values: []string{fmt.Sprintf("%s", u.Name)}})
-		attrs = append(attrs, &ldap.EntryAttribute{Name: "gecos", Values: []string{fmt.Sprintf("%s", u.Name)}})
+		attrs = append(attrs, &ldap.EntryAttribute{Name: "description", Values: []string{u.Name}})
+		attrs = append(attrs, &ldap.EntryAttribute{Name: "gecos", Values: []string{u.Name}})
 		attrs = append(attrs, &ldap.EntryAttribute{Name: "gidNumber", Values: []string{fmt.Sprintf("%d", u.PrimaryGroup)}})
 		attrs = append(attrs, &ldap.EntryAttribute{Name: "memberOf", Values: h.getGroupDNs(ctx, append(u.OtherGroups, u.PrimaryGroup))})
 
@@ -283,7 +252,7 @@ func (h configHandler) FindPosixGroups(ctx context.Context, hierarchy string) (e
 		attrs := []*ldap.EntryAttribute{}
 		attrs = append(attrs, &ldap.EntryAttribute{Name: h.backend.GroupFormat, Values: []string{g.Name}})
 		attrs = append(attrs, &ldap.EntryAttribute{Name: "uid", Values: []string{g.Name}})
-		attrs = append(attrs, &ldap.EntryAttribute{Name: "description", Values: []string{fmt.Sprintf("%s", g.Name)}})
+		attrs = append(attrs, &ldap.EntryAttribute{Name: "description", Values: []string{g.Name}})
 		attrs = append(attrs, &ldap.EntryAttribute{Name: "gidNumber", Values: []string{fmt.Sprintf("%d", g.GIDNumber)}})
 		attrs = append(attrs, &ldap.EntryAttribute{Name: "uniqueMember", Values: h.getGroupMemberDNs(ctx, g.GIDNumber)})
 		if asGroupOfUniqueNames {
@@ -300,12 +269,11 @@ func (h configHandler) FindPosixGroups(ctx context.Context, hierarchy string) (e
 }
 
 // Close does not actually close anything, because the config data is kept in memory
-func (h configHandler) Close(boundDn string, conn net.Conn) error {
+func (h configHandler) Close(boundDn string, conn net.Conn) {
 	_, span := h.tracer.Start(context.Background(), "handler.configHandler.Close")
 	defer span.End()
 
 	stats.Frontend.Add("closes", 1)
-	return nil
 }
 
 func (h configHandler) getGroupMemberDNs(ctx context.Context, gid int) []string {
@@ -436,7 +404,7 @@ func (h configHandler) getGroupDNs(ctx context.Context, gids []int) []string {
 }
 
 func (h configHandler) getGroupName(ctx context.Context, gid int) string {
-	ctx, span := h.tracer.Start(ctx, "handler.configHandler.getGroupName")
+	_, span := h.tracer.Start(ctx, "handler.configHandler.getGroupName")
 	defer span.End()
 
 	for _, g := range h.cfg.Groups {

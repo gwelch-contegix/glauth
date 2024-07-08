@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
@@ -22,7 +23,6 @@ import (
 	"github.com/gwelch-contegix/glauth/v2/internal/monitoring"
 	"github.com/gwelch-contegix/glauth/v2/pkg/config"
 	"github.com/gwelch-contegix/glauth/v2/pkg/stats"
-	"github.com/gwelch-contegix/ldaps"
 	"github.com/pquerna/otp/totp"
 )
 
@@ -98,14 +98,14 @@ func NewLdapHandler(opts ...Option) Handler {
 	return handler
 }
 
-func (h ldapHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (resultCode uint16, err error) {
+func (h ldapHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (r *ldap.SimpleBindResult, err error) {
 	ctx, span := h.tracer.Start(context.Background(), "handler.ldapHandler.Bind")
 	defer span.End()
 
 	start := time.Now()
 	defer func() {
 		h.monitor.SetResponseTimeMetric(
-			map[string]string{"operation": "bind", "status": fmt.Sprintf("%v", resultCode)},
+			map[string]string{"operation": "bind", "status": fmt.Sprintf("%v", StatusCode(err))},
 			time.Since(start).Seconds(),
 		)
 	}()
@@ -153,7 +153,7 @@ func (h ldapHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (resultCod
 
 		if !validotp {
 			h.log.Debug().Msg(fmt.Sprintf("Bind Error: invalid OTP token as %s from %s", bindDN, conn.RemoteAddr().String()))
-			return ldap.LDAPResultInvalidCredentials, nil
+			return nil, ldap.NewError(ldap.LDAPResultInvalidCredentials, errors.New("Invalid OTP code"))
 		}
 	}
 
@@ -162,26 +162,26 @@ func (h ldapHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (resultCod
 	if err != nil {
 		stats.Frontend.Add("bind_ldapSession_errors", 1)
 		h.log.Debug().Str("binddn", bindDN).Str("src", conn.RemoteAddr().String()).Err(err).Msg("could not get session")
-		return ldap.LDAPResultOperationsError, err
+		return nil, err
 	}
 	if err := s.ldap.Bind(bindDN, bindSimplePw); err != nil {
 		stats.Frontend.Add("bind_errors", 1)
 		h.log.Debug().Str("binddn", bindDN).Str("src", conn.RemoteAddr().String()).Msg("invalid creds")
-		return ldap.LDAPResultInvalidCredentials, nil
+		return nil, ldap.NewError(ldap.LDAPResultInvalidCredentials, errors.New(""))
 	}
 	stats.Frontend.Add("bind_successes", 1)
 	h.log.Debug().Str("binddn", bindDN).Str("src", conn.RemoteAddr().String()).Msg("bind success")
-	return ldap.LDAPResultSuccess, nil
+	return nil, nil
 }
 
-func (h ldapHandler) Search(boundDN string, searchReq ldap.SearchRequest, conn net.Conn) (result ldaps.ServerSearchResult, err error) {
+func (h ldapHandler) Search(boundDN string, searchReq ldap.SearchRequest, conn net.Conn) (result *ldap.SearchResult, err error) {
 	ctx, span := h.tracer.Start(context.Background(), "handler.ldapHandler.Search")
 	defer span.End()
 
 	start := time.Now()
 	defer func() {
 		h.monitor.SetResponseTimeMetric(
-			map[string]string{"operation": "search", "status": fmt.Sprintf("%v", result.ResultCode)},
+			map[string]string{"operation": "search", "status": fmt.Sprintf("%v", StatusCode(err))},
 			time.Since(start).Seconds(),
 		)
 	}()
@@ -199,8 +199,8 @@ func (h ldapHandler) Search(boundDN string, searchReq ldap.SearchRequest, conn n
 	}
 
 	// TypesOnly cannot be true: if it were, glauth would not be able to
-	// match the returned valuea against the query
-	if searchReq.TypesOnly == true {
+	// match the returned value against the query
+	if searchReq.TypesOnly {
 		wantTypesOnly = true
 		searchReq.TypesOnly = false
 	}
@@ -209,22 +209,8 @@ func (h ldapHandler) Search(boundDN string, searchReq ldap.SearchRequest, conn n
 	s, err := h.getSession(conn)
 	if err != nil {
 		stats.Frontend.Add("search_ldapSession_errors", 1)
-		return ldaps.ServerSearchResult{ResultCode: ldap.LDAPResultOperationsError}, nil
+		return nil, err
 	}
-	/*
-	   delete_idx := -1
-	   pagingSize := uint32(0)
-	   for idx, control := range searchReq.Controls {
-	       if control.GetControlType() == ldap.ControlTypePaging {
-	           fmt.Println(control.GetControlType())
-	           pagingSize = control.(*ldap.ControlPaging).PagingSize
-	           delete_idx = idx
-	       }
-	   }
-	   if delete_idx >= 0 {
-	       searchReq.Controls = append(searchReq.Controls[:delete_idx], searchReq.Controls[delete_idx+1:]...)
-	   }
-	*/
 	search := ldap.NewSearchRequest(
 		searchReq.BaseDN,
 		searchReq.Scope,
@@ -238,15 +224,6 @@ func (h ldapHandler) Search(boundDN string, searchReq ldap.SearchRequest, conn n
 	)
 
 	h.log.Debug().Interface("request", search).Msg("Search request to backend")
-	/*
-			var sr *ldap.SearchResult
-			if pagingSize > 0 {
-			    fmt.Printf("Searching with page size == %d\n", pagingSize)
-		        sr, err = s.ldap.SearchWithPaging(search, pagingSize)
-		    } else {
-		        sr, err = s.ldap.Search(search)
-		    }
-	*/
 	sr, err := s.ldap.Search(search)
 	h.log.Debug().Interface("result", sr).Msg("Backend Search result")
 
@@ -266,19 +243,6 @@ func (h ldapHandler) Search(boundDN string, searchReq ldap.SearchRequest, conn n
 		}
 	}
 
-	// WART used to debug when testing special cases against
-	// glauth acting as a backend, where it may have
-	// the same workaround thus hiding the issue
-	/*
-		for _, entry := range sr.Entries {
-			for _, attribute := range entry.Attributes {
-				if attribute.Name == "objectclass" {
-					attribute.Name = "bogus"
-				}
-			}
-		}
-	*/
-
 	// If our original attribute is not present, either because:
 	// 1-This is a root query
 	// 2-We were asked not to return attributes
@@ -295,7 +259,7 @@ func (h ldapHandler) Search(boundDN string, searchReq ldap.SearchRequest, conn n
 		for _, entry := range sr.Entries {
 			foundattname := false
 			for _, attribute := range entry.Attributes {
-				if strings.ToLower(attribute.Name) == strings.ToLower(attbits[1]) {
+				if strings.EqualFold(attribute.Name, attbits[1]) {
 					foundattname = true
 					if len(attbits[2]) == 0 {
 						attribute.Values = []string{attbits[2]}
@@ -309,23 +273,20 @@ func (h ldapHandler) Search(boundDN string, searchReq ldap.SearchRequest, conn n
 		}
 	}
 
-	ssr := ldaps.ServerSearchResult{
-		Entries:    sr.Entries,
-		Referrals:  sr.Referrals,
-		Controls:   sr.Controls,
-		ResultCode: ldap.LDAPResultSuccess,
+	ssr := ldap.SearchResult{
+		Entries:   sr.Entries,
+		Referrals: sr.Referrals,
+		Controls:  sr.Controls,
 	}
 	h.log.Debug().Interface("result", ssr).Msg("Frontend Search result")
-	if err != nil {
-		e := err.(*ldap.Error)
+	if StatusCode(err) != ldap.LDAPResultSuccess {
 		h.log.Debug().Err(err).Msg("search Err")
 		stats.Frontend.Add("search_errors", 1)
-		ssr.ResultCode = uint16(e.ResultCode)
-		return ssr, err
+		return &ssr, err
 	}
 	stats.Frontend.Add("search_successes", 1)
 	h.log.Debug().Str("filter", search.Filter).Int("numentries", len(ssr.Entries)).Msg("AP: Search OK")
-	return ssr, nil
+	return &ssr, err
 }
 
 func (h ldapHandler) buildReqAttributesList(ctx context.Context, filter string, filters []string) []string {
@@ -355,71 +316,70 @@ func (h ldapHandler) buildReqAttributesList(ctx context.Context, filter string, 
 }
 
 // Add is not yet supported for the ldap backend
-func (h ldapHandler) Add(boundDN string, req ldap.AddRequest, conn net.Conn) (resultCode uint16, err error) {
+func (h ldapHandler) Add(boundDN string, req ldap.AddRequest, conn net.Conn) (err error) {
 	_, span := h.tracer.Start(context.Background(), "handler.ldapHandler.Add")
 	defer span.End()
 
 	start := time.Now()
 	defer func() {
 		h.monitor.SetResponseTimeMetric(
-			map[string]string{"operation": "add", "status": fmt.Sprintf("%v", resultCode)},
+			map[string]string{"operation": "add", "status": fmt.Sprintf("%v", StatusCode(err))},
 			time.Since(start).Seconds(),
 		)
 	}()
-	return ldap.LDAPResultInsufficientAccessRights, nil
+	return ldap.NewError(ldap.LDAPResultInsufficientAccessRights, errors.New(""))
 }
 
 // Modify is not yet supported for the ldap backend
-func (h ldapHandler) Modify(boundDN string, req ldap.ModifyRequest, conn net.Conn) (resultCode uint16, err error) {
+func (h ldapHandler) Modify(boundDN string, req ldap.ModifyRequest, conn net.Conn) (r *ldap.ModifyResult, err error) {
 	_, span := h.tracer.Start(context.Background(), "handler.ldapHandler.Modify")
 	defer span.End()
 
 	start := time.Now()
 	defer func() {
 		h.monitor.SetResponseTimeMetric(
-			map[string]string{"operation": "modify", "status": fmt.Sprintf("%v", resultCode)},
+			map[string]string{"operation": "modify", "status": fmt.Sprintf("%v", StatusCode(err))},
 			time.Since(start).Seconds(),
 		)
 	}()
-	return ldap.LDAPResultInsufficientAccessRights, nil
+	return nil, ldap.NewError(ldap.LDAPResultInsufficientAccessRights, errors.New(""))
 }
 
 // Delete is not yet supported for the ldap backend
-func (h ldapHandler) Delete(boundDN string, deleteDN string, conn net.Conn) (resultCode uint16, err error) {
+func (h ldapHandler) Delete(boundDN string, deleteDN string, conn net.Conn) (err error) {
 	_, span := h.tracer.Start(context.Background(), "handler.ldapHandler.Delete")
 	defer span.End()
 
 	start := time.Now()
 	defer func() {
 		h.monitor.SetResponseTimeMetric(
-			map[string]string{"operation": "delete", "status": fmt.Sprintf("%v", resultCode)},
+			map[string]string{"operation": "delete", "status": fmt.Sprintf("%v", StatusCode(err))},
 			time.Since(start).Seconds(),
 		)
 	}()
-	return ldap.LDAPResultInsufficientAccessRights, nil
+	return ldap.NewError(ldap.LDAPResultInsufficientAccessRights, errors.New(""))
 }
 
 func (h ldapHandler) FindUser(ctx context.Context, userName string, searchByUPN bool) (found bool, user config.User, err error) {
-	ctx, span := h.tracer.Start(ctx, "handler.ldapHandler.FindUser")
+	_, span := h.tracer.Start(ctx, "handler.ldapHandler.FindUser")
 	defer span.End()
 	return false, config.User{}, nil
 }
 
 func (h ldapHandler) FindGroup(ctx context.Context, groupName string) (found bool, group config.Group, err error) {
-	ctx, span := h.tracer.Start(ctx, "handler.ldapHandler.FindGroup")
+	_, span := h.tracer.Start(ctx, "handler.ldapHandler.FindGroup")
 	defer span.End()
 
 	return false, config.Group{}, nil
 }
 
-func (h ldapHandler) Close(boundDn string, conn net.Conn) error {
+func (h ldapHandler) Close(boundDn string, conn net.Conn) {
 	conn.Close() // close connection to the server when then client is closed
 	h.lock.Lock()
 	defer h.lock.Unlock()
 	delete(h.sessions, connID(conn))
 	stats.Frontend.Add("closes", 1)
 	stats.Backend.Add("closes", 1)
-	return nil
 }
 
 // monitorServers tests server connectivity before listening, then keeps it updated
@@ -465,16 +425,12 @@ func (h ldapHandler) getSession(conn net.Conn) (ldapSession, error) {
 		if err != nil {
 			return ldapSession{}, err
 		}
-		dest := fmt.Sprintf("%s:%d", server.Hostname, server.Port)
-		if server.Scheme == "ldaps" {
-			tlsCfg := &tls.Config{}
-			if h.backend.Insecure {
-				tlsCfg.InsecureSkipVerify = true
-			}
-			l, err = ldap.DialTLS("tcp", dest, tlsCfg)
-		} else if server.Scheme == "ldap" {
-			l, err = ldap.Dial("tcp", dest)
+		dest := fmt.Sprintf("%s://%s:%d", server.Scheme, server.Hostname, server.Port)
+		tlsCfg := &tls.Config{}
+		if h.backend.Insecure {
+			tlsCfg.InsecureSkipVerify = true
 		}
+		l, err = ldap.DialURL(dest, ldap.DialWithTLSConfig(tlsCfg))
 		if err != nil {
 			select {
 			case h.doPing <- true: // non-blocking send
@@ -495,17 +451,13 @@ func (h ldapHandler) ping() error {
 	for k, s := range h.servers {
 		var l *ldap.Conn
 		var err error
-		dest := fmt.Sprintf("%s:%d", s.Hostname, s.Port)
+		dest := fmt.Sprintf("%s://%s:%d", s.Scheme, s.Hostname, s.Port)
 		start := time.Now()
-		if h.servers[0].Scheme == "ldaps" {
-			tlsCfg := &tls.Config{}
-			if h.backend.Insecure {
-				tlsCfg.InsecureSkipVerify = true
-			}
-			l, err = ldap.DialTLS("tcp", dest, tlsCfg)
-		} else if h.servers[0].Scheme == "ldap" {
-			l, err = ldap.Dial("tcp", dest)
+		tlsCfg := &tls.Config{}
+		if h.backend.Insecure {
+			tlsCfg.InsecureSkipVerify = true
 		}
+		l, err = ldap.DialURL(dest, ldap.DialWithTLSConfig(tlsCfg))
 		elapsed := time.Since(start)
 		h.lock.Lock()
 		if err != nil || l == nil {
@@ -526,7 +478,7 @@ func (h ldapHandler) ping() error {
 		h.log.Fatal().Err(err).Msg("error encoding tail data")
 	}
 	stats.Backend.Set("servers", stats.Stringer(string(b)))
-	if healthy == false {
+	if !healthy {
 		return fmt.Errorf("no healthy servers")
 	}
 	return nil

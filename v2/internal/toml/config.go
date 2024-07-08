@@ -77,7 +77,6 @@ func parseConfigFile(configFileLocation string, args map[string]interface{}) (*c
 				Name:       "User defined",
 				S3Endpoint: args["--aws_endpoint_url"].(string),
 			}
-			present = true
 		}
 		auth, err := aws.EnvAuth()
 		if err != nil {
@@ -254,7 +253,7 @@ func mergeConfigs(config1 interface{}, config2 interface{}) error {
 			if !ok {
 				return fmt.Errorf("config dest: %s is not a map", keyName)
 			}
-			for k, _ := range element2 {
+			for k := range element2 {
 				//fmt.Println(strings.Repeat("     ", depth), "  - key: ", k)
 				_, ok := (*element1)[k]
 				if !ok {
@@ -292,9 +291,7 @@ func mergeConfigs(config1 interface{}, config2 interface{}) error {
 				return fmt.Errorf("config dest: %s is not a map array", keyName)
 			}
 			//fmt.Println(strings.Repeat("     ", depth), "  - element1: ", element1)
-			for index, _ := range element2 {
-				*element1 = append(*element1, element2[index])
-			}
+			*element1 = append(*element1, element2...)
 		case string:
 			//fmt.Println(strings.Repeat("     ", depth), " - A string")
 			element2, ok := cfg2.(string)

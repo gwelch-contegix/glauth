@@ -71,4 +71,3 @@ Handlebars.registerHelper('dateRelative', function(context, block) {
     return context;
   };
 });
-

@@ -24,7 +24,6 @@ import (
 	"github.com/gwelch-contegix/glauth/v2/pkg/config"
 	"github.com/gwelch-contegix/glauth/v2/pkg/handler"
 	"github.com/gwelch-contegix/glauth/v2/pkg/stats"
-	"github.com/gwelch-contegix/ldaps"
 )
 
 var configattributematcher = regexp.MustCompile(`(?i)\((?P<attribute>[a-zA-Z0-9]+)\s*=\s*(?P<value>.*)\)`)
@@ -138,14 +137,14 @@ func (h databaseHandler) GetYubikeyAuth() *yubigo.YubiAuth {
 	return h.yubikeyAuth
 }
 
-func (h databaseHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (resultCode uint16, err error) {
+func (h databaseHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (result *ldap.SimpleBindResult, err error) {
 	ctx, span := h.tracer.Start(context.Background(), "plugins.databaseHandler.Bind")
 	defer span.End()
 
 	return h.ldohelper.Bind(ctx, h, bindDN, bindSimplePw, conn)
 }
 
-func (h databaseHandler) Search(bindDN string, searchReq ldap.SearchRequest, conn net.Conn) (result ldaps.ServerSearchResult, err error) {
+func (h databaseHandler) Search(bindDN string, searchReq ldap.SearchRequest, conn net.Conn) (result *ldap.SearchResult, err error) {
 	ctx, span := h.tracer.Start(context.Background(), "plugins.databaseHandler.Search")
 	defer span.End()
 
@@ -153,27 +152,27 @@ func (h databaseHandler) Search(bindDN string, searchReq ldap.SearchRequest, con
 }
 
 // Add is not yet supported for the sql backend
-func (h databaseHandler) Add(boundDN string, req ldap.AddRequest, conn net.Conn) (resultCode uint16, err error) {
+func (h databaseHandler) Add(boundDN string, req ldap.AddRequest, conn net.Conn) (err error) {
 	_, span := h.tracer.Start(context.Background(), "plugins.databaseHandler.Add")
 	defer span.End()
 
-	return ldap.LDAPResultInsufficientAccessRights, nil
+	return ldap.NewError(ldap.LDAPResultInsufficientAccessRights, errors.New(""))
 }
 
 // Modify is not yet supported for the sql backend
-func (h databaseHandler) Modify(boundDN string, req ldap.ModifyRequest, conn net.Conn) (resultCode uint16, err error) {
+func (h databaseHandler) Modify(boundDN string, req ldap.ModifyRequest, conn net.Conn) (result *ldap.ModifyResult, err error) {
 	_, span := h.tracer.Start(context.Background(), "plugins.databaseHandler.Modify")
 	defer span.End()
 
-	return ldap.LDAPResultInsufficientAccessRights, nil
+	return nil, ldap.NewError(ldap.LDAPResultInsufficientAccessRights, errors.New(""))
 }
 
 // Delete is not yet supported for the sql backend
-func (h databaseHandler) Delete(boundDN string, deleteDN string, conn net.Conn) (resultCode uint16, err error) {
+func (h databaseHandler) Delete(boundDN string, deleteDN string, conn net.Conn) (err error) {
 	_, span := h.tracer.Start(context.Background(), "plugins.databaseHandler.Delete")
 	defer span.End()
 
-	return ldap.LDAPResultInsufficientAccessRights, nil
+	return ldap.NewError(ldap.LDAPResultInsufficientAccessRights, errors.New(""))
 }
 
 func (h databaseHandler) FindUser(ctx context.Context, userName string, searchByUPN bool) (f bool, u config.User, err error) {
@@ -336,23 +335,19 @@ func (h databaseHandler) FindPosixGroups(ctx context.Context, hierarchy string) 
 	return entries, nil
 }
 
-func (h databaseHandler) Close(boundDn string, conn net.Conn) error {
+func (h databaseHandler) Close(boundDn string, conn net.Conn) {
 	_, span := h.tracer.Start(context.Background(), "plugins.databaseHandler.Close")
 	defer span.End()
 
 	stats.Frontend.Add("closes", 1)
-	return nil
 }
 
 func (h databaseHandler) intToBool(value int) bool {
-	if value == 0 {
-		return false
-	}
-	return true
+	return value != 0
 }
 
 func (h databaseHandler) commaListToIntTable(ctx context.Context, commaList string) []int {
-	ctx, span := h.tracer.Start(ctx, "plugins.databaseHandler.commaListToIntTable")
+	_, span := h.tracer.Start(ctx, "plugins.databaseHandler.commaListToIntTable")
 	defer span.End()
 
 	if len(commaList) == 0 {
@@ -371,7 +366,7 @@ func (h databaseHandler) commaListToIntTable(ctx context.Context, commaList stri
 }
 
 func (h databaseHandler) commaListToStringTable(ctx context.Context, commaList string) []string {
-	ctx, span := h.tracer.Start(ctx, "plugins.databaseHandler.commaListToStringTable")
+	_, span := h.tracer.Start(ctx, "plugins.databaseHandler.commaListToStringTable")
 	defer span.End()
 
 	if len(commaList) == 0 {
