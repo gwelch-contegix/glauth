@@ -1,8 +1,8 @@
 %global debug_package %{nil}
 
 Name:           glauth
-Version:        3.4.8
-Release:        96%{?dist}
+Version:        3.4.9
+Release:        0%{?dist}
 Summary:        glauth
 
 License:        MIT
@@ -24,6 +24,8 @@ glauth
 
 %build
 make M=pkg/plugins/glauth-keycloak pull-plugin-dependencies
+# because fuck golang
+go get github.com/zitadel/oidc/v3/internal/otel@v3.45.3
 make releasemain
 make P=keycloak M=pkg/plugins/glauth-keycloak releaseplugin
 sed 's@/Users/gwelch/build/source/glauth/v2/bin/darwinamd64@%{_libdir}@g' pkg/plugins/glauth-keycloak/sample-keycloak.cfg >bin/glauth.cfg

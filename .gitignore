@@ -15,3 +15,9 @@ v2/buildlogs
 
 # gomocks auto-generated
 **/mock_*.go
+
+# rpm
+RPMS
+rpmbuild/SOURCES/*
+!rpmbuild/SOURCES/glauth.service
+tmp

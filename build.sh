@@ -11,8 +11,6 @@ gcp -r -t ./tmp v2
 gcp -r -t ./tmp/v2 LICENSE
 gcp -r -t ./tmp/v2/pkg/plugins ../glauth-keycloak
 rm -f rpmbuild/SOURCES/glauth.tar.gz
-rm -f rpmbuild/SOURCES/go.mod
-gcp -r v2/go.mod rpmbuild/SOURCES/go.mod
 tar czf rpmbuild/SOURCES/glauth.tar.gz -C tmp v2
 
 docker build -t glauth_build -f Dockerfile rpmbuild/ || exit 1
