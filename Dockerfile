@@ -1,7 +1,8 @@
 FROM docker.io/rockylinux/rockylinux:8-minimal
 
 RUN microdnf update -y && microdnf install -y make rpmdevtools rpmlint dnf 'dnf-command(builddep)'
-RUN microdnf install -y go-srpm-macros go{lang,lang-bin,-toolset}
+# dnf is used here because builddep and spectool use it and this command (and the indexes it downloads) will stay cached when doing multiple builds
+RUN dnf install -y go-srpm-macros go{lang,lang-bin,-toolset}
 
 # This isn't the real build but it will hopefully cache at least some of the build
 RUN mkdir -p /root/v2/ && cd /root/v2/ && go mod init temp && go get github.com/gwelch-contegix/glauth/v2@master && go mod download && go build -ldflags "-s -w" -v -buildvcs=false -trimpath github.com/glauth/glauth/v2 || true
