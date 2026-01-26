@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -599,8 +600,8 @@ func (l LDAPOpsHelper) searchMaybePosixAccounts(ctx context.Context, h LDAPOpsHa
 
 func (l LDAPOpsHelper) topLevelRootNode(ctx context.Context, searchBaseDN string) *ldap.Entry {
 	attrs := []*ldap.EntryAttribute{}
-	dnBits := strings.Split(searchBaseDN, ",")
-	for _, dnBit := range dnBits {
+	dnBits := strings.SplitSeq(searchBaseDN, ",")
+	for dnBit := range dnBits {
 		chunk := strings.Split(dnBit, "=")
 		attrs = append(attrs, &ldap.EntryAttribute{Name: chunk[0], Values: []string{chunk[1]}})
 	}
@@ -718,10 +719,8 @@ func (l LDAPOpsHelper) findUser(ctx context.Context, h LDAPOpsHandler, bindDN st
 func (l LDAPOpsHelper) checkCapability(ctx context.Context, user config.User, action string, objects []string) bool {
 	for _, capability := range user.Capabilities {
 		if capability.Action == action {
-			for _, object := range objects {
-				if capability.Object == object {
-					return true
-				}
+			if slices.Contains(objects, capability.Object) {
+				return true
 			}
 		}
 	}

@@ -26,7 +26,7 @@ type User struct {
 }
 
 // NewConfig reads the cli flags and config file
-func NewConfig(checkConfig bool, location string, args map[string]interface{}) (*config.Config, error) {
+func NewConfig(checkConfig bool, location string, args map[string]any) (*config.Config, error) {
 	// Parse config-file into config{} struct
 	cfg, err := parseConfigFile(location, args)
 	if err != nil {
@@ -60,7 +60,7 @@ func NewConfig(checkConfig bool, location string, args map[string]interface{}) (
 	return cfg, nil
 }
 
-func parseConfigFile(configFileLocation string, args map[string]interface{}) (*config.Config, error) {
+func parseConfigFile(configFileLocation string, args map[string]any) (*config.Config, error) {
 	cfg := new(config.Config)
 	// setup defaults
 	cfg.LDAP.Enabled = false
@@ -112,7 +112,7 @@ func parseConfigFile(configFileLocation string, args map[string]interface{}) (*c
 		}
 
 		if fInfo.IsDir() { // multiple files in a directory
-			rawCfgStruct := make(map[string]interface{})
+			rawCfgStruct := make(map[string]any)
 
 			// To keep things simple, we are not going to use the default values built in Cfg
 			// so far (LDAP.Enabled, LDAPS.Enabled, etc) so do not forget to specify them!
@@ -136,7 +136,7 @@ func parseConfigFile(configFileLocation string, args map[string]interface{}) (*c
 				canonicalName := filepath.Join(configFileLocation, f.Name())
 
 				bs, _ := os.ReadFile(canonicalName)
-				var curRawCfgStruct interface{}
+				var curRawCfgStruct any
 				if err := toml.Unmarshal(bs, &curRawCfgStruct); err != nil {
 					return cfg, err
 				}
@@ -217,7 +217,7 @@ func usersCustomAttributes(location string, config *config.Config) {
 				continue
 			}
 
-			x := make(map[string]interface{})
+			x := make(map[string]any)
 
 			for _, attribute := range user.CustomAttributes {
 				err := md.PrimitiveDecode(attribute, x)
@@ -227,7 +227,7 @@ func usersCustomAttributes(location string, config *config.Config) {
 				for k, v := range x {
 
 					if config.Users[idx].CustomAttrs == nil {
-						config.Users[idx].CustomAttrs = make(map[string]interface{})
+						config.Users[idx].CustomAttrs = make(map[string]any)
 					}
 
 					config.Users[idx].CustomAttrs[k] = v
@@ -238,18 +238,18 @@ func usersCustomAttributes(location string, config *config.Config) {
 	}
 }
 
-func mergeConfigs(config1 interface{}, config2 interface{}) error {
-	var merger func(int, string, interface{}, interface{}) error
-	merger = func(depth int, keyName string, cfg1 interface{}, cfg2 interface{}) error {
+func mergeConfigs(config1 any, config2 any) error {
+	var merger func(int, string, any, any) error
+	merger = func(depth int, keyName string, cfg1 any, cfg2 any) error {
 		//fmt.Println(strings.Repeat("    ", depth), "Handling element: ", keyName, " for: ", cfg2)
 		switch element2 := cfg2.(type) {
-		case map[string]interface{}:
+		case map[string]any:
 			//fmt.Println(strings.Repeat("     ", depth), " - A map")
-			element2, ok := cfg2.(map[string]interface{})
+			element2, ok := cfg2.(map[string]any)
 			if !ok {
 				return fmt.Errorf("config source: %s is not a map", keyName)
 			}
-			element1, ok := cfg1.(*map[string]interface{})
+			element1, ok := cfg1.(*map[string]any)
 			if !ok {
 				return fmt.Errorf("config dest: %s is not a map", keyName)
 			}
@@ -260,14 +260,14 @@ func mergeConfigs(config1 interface{}, config2 interface{}) error {
 					(*element1)[k] = element2[k]
 				} else {
 					//fmt.Println(strings.Repeat("     ", depth), "  - merging: ", element2[k])
-					asanarrayptr, ok := (*element1)[k].([]map[string]interface{})
+					asanarrayptr, ok := (*element1)[k].([]map[string]any)
 					if ok {
 						if err := merger(depth+1, k, &asanarrayptr, element2[k]); err != nil {
 							return err
 						}
 						(*element1)[k] = asanarrayptr
 					} else {
-						asamapptr, ok := (*element1)[k].(map[string]interface{})
+						asamapptr, ok := (*element1)[k].(map[string]any)
 						if ok {
 							if err := merger(depth+1, k, &asamapptr, element2[k]); err != nil {
 								return err
@@ -279,14 +279,14 @@ func mergeConfigs(config1 interface{}, config2 interface{}) error {
 					}
 				}
 			}
-		case []map[string]interface{}:
+		case []map[string]any:
 			//fmt.Println(strings.Repeat("     ", depth), " - An array")
-			element2, ok := cfg2.([]map[string]interface{})
+			element2, ok := cfg2.([]map[string]any)
 			if !ok {
 				return fmt.Errorf("config source: %s is not a map array", keyName)
 			}
 			//fmt.Println(strings.Repeat("     ", depth), "  - element2: ", element2)
-			element1, ok := cfg1.(*[]map[string]interface{})
+			element1, ok := cfg1.(*[]map[string]any)
 			if !ok {
 				return fmt.Errorf("config dest: %s is not a map array", keyName)
 			}
@@ -325,7 +325,7 @@ func mergeConfigs(config1 interface{}, config2 interface{}) error {
 	return nil
 }
 
-func handleArgs(cfg *config.Config, args map[string]interface{}) (*config.Config, error) {
+func handleArgs(cfg *config.Config, args map[string]any) (*config.Config, error) {
 	// LDAP flags
 	if ldap, ok := args["--ldap"].(string); ok && ldap != "" {
 		cfg.LDAP.Enabled = true

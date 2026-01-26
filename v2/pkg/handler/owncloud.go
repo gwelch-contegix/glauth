@@ -69,7 +69,7 @@ func NewOwnCloudHandler(opts ...Option) Handler {
 	}
 }
 
-func (h ownCloudHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (r *ldap.SimpleBindResult, err error) {
+func (h ownCloudHandler) Bind(ctx context.Context, bindDN, bindSimplePw string, conn net.Conn) (r *ldap.SimpleBindResult, err error) {
 	start := time.Now()
 	defer func() {
 		h.monitor.SetResponseTimeMetric(
@@ -122,7 +122,7 @@ func (h ownCloudHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (r *ld
 	return nil, nil
 }
 
-func (h ownCloudHandler) Search(bindDN string, searchReq ldap.SearchRequest, conn net.Conn) (result *ldap.SearchResult, err error) {
+func (h ownCloudHandler) Search(ctx context.Context, bindDN string, searchReq ldap.SearchRequest, conn net.Conn) (result *ldap.SearchResult, err error) {
 	start := time.Now()
 	defer func() {
 		h.monitor.SetResponseTimeMetric(
@@ -162,7 +162,7 @@ func (h ownCloudHandler) Search(bindDN string, searchReq ldap.SearchRequest, con
 	default:
 		return nil, ldap.NewError(ldap.LDAPResultOperationsError, fmt.Errorf("search error: unhandled filter type: %s [%s]", filterEntity, searchReq.Filter))
 	case "posixgroup":
-		groups, err := session.getGroups()
+		groups, err := session.getGroups(ctx)
 		if err != nil {
 			return nil, errors.New("search error: error getting groups")
 		}
@@ -191,7 +191,7 @@ func (h ownCloudHandler) Search(bindDN string, searchReq ldap.SearchRequest, con
 				userName = strings.TrimPrefix(parts[0], "cn=")
 			}
 		}
-		users, err := session.getUsers(userName)
+		users, err := session.getUsers(ctx, userName)
 		if err != nil {
 			h.log.Debug().Str("username", userName).Err(err).Msg("Could not get user")
 			return nil, errors.New("search error: error getting users")
@@ -220,7 +220,7 @@ func (h ownCloudHandler) Search(bindDN string, searchReq ldap.SearchRequest, con
 }
 
 // Add is not yet supported for the owncloud backend
-func (h ownCloudHandler) Add(boundDN string, req ldap.AddRequest, conn net.Conn) (err error) {
+func (h ownCloudHandler) Add(ctx context.Context, boundDN string, req ldap.AddRequest, conn net.Conn) (err error) {
 	start := time.Now()
 	defer func() {
 		h.monitor.SetResponseTimeMetric(
@@ -232,7 +232,7 @@ func (h ownCloudHandler) Add(boundDN string, req ldap.AddRequest, conn net.Conn)
 }
 
 // Modify is not yet supported for the owncloud backend
-func (h ownCloudHandler) Modify(boundDN string, req ldap.ModifyRequest, conn net.Conn) (result *ldap.ModifyResult, err error) {
+func (h ownCloudHandler) Modify(ctx context.Context, boundDN string, req ldap.ModifyRequest, conn net.Conn) (result *ldap.ModifyResult, err error) {
 	start := time.Now()
 	defer func() {
 		h.monitor.SetResponseTimeMetric(
@@ -244,8 +244,8 @@ func (h ownCloudHandler) Modify(boundDN string, req ldap.ModifyRequest, conn net
 }
 
 // Delete is not yet supported for the owncloud backend
-func (h ownCloudHandler) Delete(boundDN string, deleteDN string, conn net.Conn) (err error) {
-	_, span := h.tracer.Start(context.Background(), "handler.configHandler.Delete")
+func (h ownCloudHandler) Delete(ctx context.Context, boundDN string, deleteDN string, conn net.Conn) (err error) {
+	_, span := h.tracer.Start(ctx, "handler.configHandler.Delete")
 	defer span.End()
 
 	start := time.Now()
@@ -273,7 +273,7 @@ func (h ownCloudHandler) FindGroup(ctx context.Context, groupName string) (found
 	return false, config.Group{}, nil
 }
 
-func (h ownCloudHandler) Close(boundDN string, conn net.Conn) {
+func (h ownCloudHandler) Close(ctx context.Context, boundDN string, conn net.Conn) {
 	conn.Close() // close connection to the server when then client is closed
 	h.lock.Lock()
 	defer h.lock.Unlock()
@@ -305,9 +305,9 @@ func (h ownCloudHandler) login(name, pw string) bool {
 type OCSGroupsResponse struct {
 	Ocs struct {
 		Meta struct {
-			Message    interface{} `json:"message"`
-			Statuscode int         `json:"statuscode"`
-			Status     string      `json:"status"`
+			Message    any    `json:"message"`
+			Statuscode int    `json:"statuscode"`
+			Status     string `json:"status"`
 		} `json:"meta"`
 		Data struct {
 			Groups []string `json:"groups"`
@@ -315,9 +315,8 @@ type OCSGroupsResponse struct {
 	} `json:"ocs"`
 }
 
-func (s ownCloudSession) getGroups() ([]msgraph.Group, error) {
+func (s ownCloudSession) getGroups(ctx context.Context) ([]msgraph.Group, error) {
 	if s.useGraphAPI {
-		ctx := context.Background()
 		req := s.NewClient().Groups().Request()
 		req.Expand("members")
 		return req.Get(ctx)
@@ -354,9 +353,9 @@ type OCSUsersResponse struct {
 			Users []string `json:"users"`
 		} `json:"data"`
 		Meta struct {
-			Statuscode int         `json:"statuscode"`
-			Message    interface{} `json:"message"`
-			Status     string      `json:"status"`
+			Statuscode int    `json:"statuscode"`
+			Message    any    `json:"message"`
+			Status     string `json:"status"`
 		} `json:"meta"`
 	} `json:"ocs"`
 }
@@ -376,10 +375,9 @@ func (s ownCloudSession) RoundTrip(req *http.Request) (*http.Response, error) {
 	return s.client.Transport.RoundTrip(req)
 }
 
-func (s ownCloudSession) getUsers(userName string) ([]msgraph.User, error) {
+func (s ownCloudSession) getUsers(ctx context.Context, userName string) ([]msgraph.User, error) {
 	if s.useGraphAPI {
 		s.log.Debug().Msg("using graph api")
-		ctx := context.Background()
 		req := s.NewClient().Users()
 		if len(userName) > 0 {
 			s.log.Debug().Msg("fetching single user")

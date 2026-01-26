@@ -11,11 +11,11 @@ import (
 
 func TestNewMonitorImplementsInterface(t *testing.T) {
 	logger := zerolog.Nop()
-	m := NewMonitor(&logger)
+	_ = NewMonitor(&logger)
 
-	i := reflect.TypeOf((*MonitorInterface)(nil)).Elem()
+	i := reflect.TypeFor[MonitorInterface]()
 
-	if !reflect.TypeOf(m).Implements(i) {
+	if !reflect.TypeFor[*Monitor]().Implements(i) {
 		t.Fatal("Monitor doesn't implement MonitorInterface")
 	}
 }

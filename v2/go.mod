@@ -9,7 +9,7 @@ require (
 	github.com/docopt/docopt-go v0.0.0-20180111231733-ee0de3bc6815
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/go-ldap/ldap/v3 v3.4.12
-	github.com/gwelch-contegix/ldaps v0.0.0-20240806172251-2ea7c35167cf
+	github.com/gwelch-contegix/ldaps v0.0.0-20260124010953-75007f8a148f
 	github.com/jinzhu/copier v0.4.0
 	github.com/pires/go-proxyproto v0.8.1
 	github.com/pquerna/otp v1.5.0
@@ -28,6 +28,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.39.0
 	go.uber.org/mock v0.4.0
 	golang.org/x/crypto v0.47.0
+	golang.org/x/net v0.49.0
 	gopkg.in/amz.v3 v3.0.0-20201001071545-24fc1eceb27b
 )
 
@@ -43,6 +44,7 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.4 // indirect
+	github.com/matoous/go-nanoid/v2 v2.1.0 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
@@ -54,7 +56,6 @@ require (
 	go.opentelemetry.io/otel/metric v1.39.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.9.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
-	golang.org/x/net v0.49.0 // indirect
 	golang.org/x/sys v0.40.0 // indirect
 	golang.org/x/text v0.33.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260114163908-3f89685c29c3 // indirect

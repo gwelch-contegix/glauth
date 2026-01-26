@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"crypto/tls"
 	"errors"
 	"fmt"
@@ -77,6 +78,19 @@ func NewServer(opts ...Option) (*LdapSvc, error) {
 			initFunc, ok := nph.(func(...handler.Option) handler.Handler)
 
 			if !ok {
+				initFunc, ok := nph.(func(context.Context, ...handler.Option) handler.Handler)
+				if ok {
+					ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+					defer cancel()
+					helper = initFunc(
+						ctx,
+						handler.Logger(&s.log),
+						handler.Config(s.c),
+						handler.YubiAuth(s.yubiAuth),
+						handler.LDAPHelper(loh),
+						handler.Tracer(s.tracer),
+					)
+				}
 				return nil, errors.New("loaded helper plugin lacks a proper NewPluginHandler function")
 			}
 			// Normally, here, we would somehow have imported our plugin into our

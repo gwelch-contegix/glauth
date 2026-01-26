@@ -63,8 +63,8 @@ func (h configHandler) GetYubikeyAuth() *yubigo.YubiAuth {
 }
 
 // Bind implements a bind request against the config file
-func (h configHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (*ldap.SimpleBindResult, error) {
-	ctx, span := h.tracer.Start(context.Background(), "handler.configHandler.Bind")
+func (h configHandler) Bind(ctx context.Context, bindDN, bindSimplePw string, conn net.Conn) (*ldap.SimpleBindResult, error) {
+	ctx, span := h.tracer.Start(ctx, "handler.configHandler.Bind")
 	defer span.End()
 
 	start := time.Now()
@@ -78,8 +78,8 @@ func (h configHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (*ldap.S
 }
 
 // Search implements a search request against the config file
-func (h configHandler) Search(bindDN string, searchReq ldap.SearchRequest, conn net.Conn) (*ldap.SearchResult, error) {
-	ctx, span := h.tracer.Start(context.Background(), "handler.configHandler.Search")
+func (h configHandler) Search(ctx context.Context, bindDN string, searchReq ldap.SearchRequest, conn net.Conn) (*ldap.SearchResult, error) {
+	ctx, span := h.tracer.Start(ctx, "handler.configHandler.Search")
 	defer span.End()
 
 	start := time.Now()
@@ -92,17 +92,17 @@ func (h configHandler) Search(bindDN string, searchReq ldap.SearchRequest, conn 
 }
 
 // Add is not supported for a static config file
-func (h configHandler) Add(boundDN string, req ldap.AddRequest, conn net.Conn) error {
+func (h configHandler) Add(ctx context.Context, boundDN string, req ldap.AddRequest, conn net.Conn) error {
 	return ldap.NewError(ldap.LDAPResultInsufficientAccessRights, errors.New(""))
 }
 
 // Modify is not supported for a static config file
-func (h configHandler) Modify(boundDN string, req ldap.ModifyRequest, conn net.Conn) (*ldap.ModifyResult, error) {
+func (h configHandler) Modify(ctx context.Context, boundDN string, req ldap.ModifyRequest, conn net.Conn) (*ldap.ModifyResult, error) {
 	return nil, ldap.NewError(ldap.LDAPResultInsufficientAccessRights, errors.New(""))
 }
 
 // Delete is not supported for a static config file
-func (h configHandler) Delete(boundDN string, deleteDN string, conn net.Conn) error {
+func (h configHandler) Delete(ctx context.Context, boundDN string, deleteDN string, conn net.Conn) error {
 	return ldap.NewError(ldap.LDAPResultInsufficientAccessRights, errors.New(""))
 }
 
@@ -212,7 +212,7 @@ func (h configHandler) FindPosixAccounts(ctx context.Context, hierarchy string) 
 		if len(u.CustomAttrs) > 0 {
 			for key, attr := range u.CustomAttrs {
 				switch typedattr := attr.(type) {
-				case []interface{}:
+				case []any:
 					var values []string
 					for _, v := range typedattr {
 						switch typedvalue := v.(type) {
@@ -269,8 +269,8 @@ func (h configHandler) FindPosixGroups(ctx context.Context, hierarchy string) (e
 }
 
 // Close does not actually close anything, because the config data is kept in memory
-func (h configHandler) Close(boundDn string, conn net.Conn) {
-	_, span := h.tracer.Start(context.Background(), "handler.configHandler.Close")
+func (h configHandler) Close(ctx context.Context, boundDn string, conn net.Conn) {
+	_, span := h.tracer.Start(ctx, "handler.configHandler.Close")
 	defer span.End()
 
 	stats.Frontend.Add("closes", 1)

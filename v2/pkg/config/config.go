@@ -105,7 +105,7 @@ type (
 		GivenName     string
 		SN            string
 		Homedir       string
-		CustomAttrs   map[string]interface{}
+		CustomAttrs   map[string]any
 	}
 
 	Group struct {

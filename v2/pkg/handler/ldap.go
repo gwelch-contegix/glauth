@@ -98,8 +98,8 @@ func NewLdapHandler(opts ...Option) Handler {
 	return handler
 }
 
-func (h ldapHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (r *ldap.SimpleBindResult, err error) {
-	ctx, span := h.tracer.Start(context.Background(), "handler.ldapHandler.Bind")
+func (h ldapHandler) Bind(ctx context.Context, bindDN, bindSimplePw string, conn net.Conn) (r *ldap.SimpleBindResult, err error) {
+	ctx, span := h.tracer.Start(ctx, "handler.ldapHandler.Bind")
 	defer span.End()
 
 	start := time.Now()
@@ -174,8 +174,8 @@ func (h ldapHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (r *ldap.S
 	return nil, nil
 }
 
-func (h ldapHandler) Search(boundDN string, searchReq ldap.SearchRequest, conn net.Conn) (result *ldap.SearchResult, err error) {
-	ctx, span := h.tracer.Start(context.Background(), "handler.ldapHandler.Search")
+func (h ldapHandler) Search(ctx context.Context, boundDN string, searchReq ldap.SearchRequest, conn net.Conn) (result *ldap.SearchResult, err error) {
+	ctx, span := h.tracer.Start(ctx, "handler.ldapHandler.Search")
 	defer span.End()
 
 	start := time.Now()
@@ -316,8 +316,8 @@ func (h ldapHandler) buildReqAttributesList(ctx context.Context, filter string, 
 }
 
 // Add is not yet supported for the ldap backend
-func (h ldapHandler) Add(boundDN string, req ldap.AddRequest, conn net.Conn) (err error) {
-	_, span := h.tracer.Start(context.Background(), "handler.ldapHandler.Add")
+func (h ldapHandler) Add(ctx context.Context, boundDN string, req ldap.AddRequest, conn net.Conn) (err error) {
+	_, span := h.tracer.Start(ctx, "handler.ldapHandler.Add")
 	defer span.End()
 
 	start := time.Now()
@@ -331,8 +331,8 @@ func (h ldapHandler) Add(boundDN string, req ldap.AddRequest, conn net.Conn) (er
 }
 
 // Modify is not yet supported for the ldap backend
-func (h ldapHandler) Modify(boundDN string, req ldap.ModifyRequest, conn net.Conn) (r *ldap.ModifyResult, err error) {
-	_, span := h.tracer.Start(context.Background(), "handler.ldapHandler.Modify")
+func (h ldapHandler) Modify(ctx context.Context, boundDN string, req ldap.ModifyRequest, conn net.Conn) (r *ldap.ModifyResult, err error) {
+	_, span := h.tracer.Start(ctx, "handler.ldapHandler.Modify")
 	defer span.End()
 
 	start := time.Now()
@@ -346,8 +346,8 @@ func (h ldapHandler) Modify(boundDN string, req ldap.ModifyRequest, conn net.Con
 }
 
 // Delete is not yet supported for the ldap backend
-func (h ldapHandler) Delete(boundDN string, deleteDN string, conn net.Conn) (err error) {
-	_, span := h.tracer.Start(context.Background(), "handler.ldapHandler.Delete")
+func (h ldapHandler) Delete(ctx context.Context, boundDN string, deleteDN string, conn net.Conn) (err error) {
+	_, span := h.tracer.Start(ctx, "handler.ldapHandler.Delete")
 	defer span.End()
 
 	start := time.Now()
@@ -373,7 +373,7 @@ func (h ldapHandler) FindGroup(ctx context.Context, groupName string) (found boo
 	return false, config.Group{}, nil
 }
 
-func (h ldapHandler) Close(boundDn string, conn net.Conn) {
+func (h ldapHandler) Close(ctx context.Context, boundDn string, conn net.Conn) {
 	conn.Close() // close connection to the server when then client is closed
 	h.lock.Lock()
 	defer h.lock.Unlock()

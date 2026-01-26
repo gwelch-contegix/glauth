@@ -46,7 +46,7 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 		return []byte("?")
 	})
 
-	var vs map[string]interface{}
+	var vs map[string]any
 	err = json.Unmarshal(body, &vs)
 	if err != nil {
 		log.Printf("Error unmarshalling json from %q: %v", c.url, err)
@@ -77,7 +77,7 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 		case bool:
 			ch <- prometheus.MustNewConstMetric(desc, prometheus.UntypedValue,
 				valToFloat(v))
-		case map[string]interface{}:
+		case map[string]any:
 			// We only support explicitly written label names.
 			if len(lnames) != 1 {
 				continue
@@ -89,7 +89,7 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 		case string:
 			// Not supported by Prometheus.
 			continue
-		case []interface{}:
+		case []any:
 			// Not supported by Prometheus.
 			continue
 		default:
@@ -122,7 +122,7 @@ func NewCollector(url string) *Collector {
 	return c
 }
 
-func valToFloat(v interface{}) float64 {
+func valToFloat(v any) float64 {
 	switch v := v.(type) {
 	case float64:
 		return v

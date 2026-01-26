@@ -34,7 +34,7 @@ type SqlBackend interface {
 	// Create db/schema if necessary
 	CreateSchema(db *sql.DB)
 	// Migrate schema if necessary
-	MigrateSchema(db *sql.DB, checker func(*sql.DB, string, string) bool)
+	MigrateSchema(db *sql.DB, ctx context.Context, checker func(*sql.DB, context.Context, string, string) bool)
 	//
 	GetPrepareSymbol() string
 }
@@ -58,7 +58,7 @@ type databaseHandler struct {
 	tracer trace.Tracer
 }
 
-func NewDatabaseHandler(sqlBackend SqlBackend, opts ...handler.Option) handler.Handler {
+func NewDatabaseHandler(ctx context.Context, sqlBackend SqlBackend, opts ...handler.Option) handler.Handler {
 	options := handler.NewOptions(opts...)
 
 	// Note: we will never terminate this connection pool.
@@ -73,7 +73,7 @@ func NewDatabaseHandler(sqlBackend SqlBackend, opts ...handler.Option) handler.H
 		options.Logger.Error().Err(err).Msg(fmt.Sprintf("unable to open SQL database named '%s'", options.Backend.Database))
 		os.Exit(1)
 	}
-	err = db.Ping()
+	err = db.PingContext(ctx)
 	if err != nil {
 		options.Logger.Error().Err(err).Msg(fmt.Sprintf("unable to communicate with SQL database error: %s", options.Backend.Database))
 		os.Exit(1)
@@ -97,16 +97,16 @@ func NewDatabaseHandler(sqlBackend SqlBackend, opts ...handler.Option) handler.H
 	}
 
 	sqlBackend.CreateSchema(db)
-	sqlBackend.MigrateSchema(db, ColumnExists)
+	sqlBackend.MigrateSchema(db, ctx, ColumnExists)
 
 	options.Logger.Info().Msg("Database (" + sqlBackend.GetDriverName() + "::" + options.Backend.Database + ") Plugin: Ready")
 
 	return handler
 }
 
-func ColumnExists(db *sql.DB, tableName string, columnName string) bool {
+func ColumnExists(db *sql.DB, ctx context.Context, tableName string, columnName string) bool {
 	var found string
-	err := db.QueryRowContext(context.Background(), fmt.Sprintf(`SELECT COUNT(%s) FROM %s`, columnName, tableName)).Scan(
+	err := db.QueryRowContext(ctx, fmt.Sprintf(`SELECT COUNT(%s) FROM %s`, columnName, tableName)).Scan(
 		&found)
 	return err == nil
 }
@@ -137,39 +137,39 @@ func (h databaseHandler) GetYubikeyAuth() *yubigo.YubiAuth {
 	return h.yubikeyAuth
 }
 
-func (h databaseHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (result *ldap.SimpleBindResult, err error) {
-	ctx, span := h.tracer.Start(context.Background(), "plugins.databaseHandler.Bind")
+func (h databaseHandler) Bind(ctx context.Context, bindDN, bindSimplePw string, conn net.Conn) (result *ldap.SimpleBindResult, err error) {
+	ctx, span := h.tracer.Start(ctx, "plugins.databaseHandler.Bind")
 	defer span.End()
 
 	return h.ldohelper.Bind(ctx, h, bindDN, bindSimplePw, conn)
 }
 
-func (h databaseHandler) Search(bindDN string, searchReq ldap.SearchRequest, conn net.Conn) (result *ldap.SearchResult, err error) {
-	ctx, span := h.tracer.Start(context.Background(), "plugins.databaseHandler.Search")
+func (h databaseHandler) Search(ctx context.Context, bindDN string, searchReq ldap.SearchRequest, conn net.Conn) (result *ldap.SearchResult, err error) {
+	ctx, span := h.tracer.Start(ctx, "plugins.databaseHandler.Search")
 	defer span.End()
 
 	return h.ldohelper.Search(ctx, h, bindDN, searchReq, conn)
 }
 
 // Add is not yet supported for the sql backend
-func (h databaseHandler) Add(boundDN string, req ldap.AddRequest, conn net.Conn) (err error) {
-	_, span := h.tracer.Start(context.Background(), "plugins.databaseHandler.Add")
+func (h databaseHandler) Add(ctx context.Context, boundDN string, req ldap.AddRequest, conn net.Conn) (err error) {
+	_, span := h.tracer.Start(ctx, "plugins.databaseHandler.Add")
 	defer span.End()
 
 	return ldap.NewError(ldap.LDAPResultInsufficientAccessRights, errors.New(""))
 }
 
 // Modify is not yet supported for the sql backend
-func (h databaseHandler) Modify(boundDN string, req ldap.ModifyRequest, conn net.Conn) (result *ldap.ModifyResult, err error) {
-	_, span := h.tracer.Start(context.Background(), "plugins.databaseHandler.Modify")
+func (h databaseHandler) Modify(ctx context.Context, boundDN string, req ldap.ModifyRequest, conn net.Conn) (result *ldap.ModifyResult, err error) {
+	_, span := h.tracer.Start(ctx, "plugins.databaseHandler.Modify")
 	defer span.End()
 
 	return nil, ldap.NewError(ldap.LDAPResultInsufficientAccessRights, errors.New(""))
 }
 
 // Delete is not yet supported for the sql backend
-func (h databaseHandler) Delete(boundDN string, deleteDN string, conn net.Conn) (err error) {
-	_, span := h.tracer.Start(context.Background(), "plugins.databaseHandler.Delete")
+func (h databaseHandler) Delete(ctx context.Context, boundDN string, deleteDN string, conn net.Conn) (err error) {
+	_, span := h.tracer.Start(ctx, "plugins.databaseHandler.Delete")
 	defer span.End()
 
 	return ldap.NewError(ldap.LDAPResultInsufficientAccessRights, errors.New(""))
@@ -283,14 +283,14 @@ func (h databaseHandler) FindPosixAccounts(ctx context.Context, hierarchy string
 		entry := h.getAccount(ctx, hierarchy, u)
 
 		if custattrstr != "{}" {
-			var r map[string]interface{}
+			var r map[string]any
 			err := json.Unmarshal([]byte(custattrstr), &r)
 			if err != nil {
 				return entries, err
 			}
 			for key, attr := range r {
 				switch typedattr := attr.(type) {
-				case []interface{}:
+				case []any:
 					var values []string
 					for _, v := range typedattr {
 						switch typedvalue := v.(type) {
@@ -335,8 +335,8 @@ func (h databaseHandler) FindPosixGroups(ctx context.Context, hierarchy string) 
 	return entries, nil
 }
 
-func (h databaseHandler) Close(boundDn string, conn net.Conn) {
-	_, span := h.tracer.Start(context.Background(), "plugins.databaseHandler.Close")
+func (h databaseHandler) Close(ctx context.Context, boundDn string, conn net.Conn) {
+	_, span := h.tracer.Start(ctx, "plugins.databaseHandler.Close")
 	defer span.End()
 
 	stats.Frontend.Add("closes", 1)

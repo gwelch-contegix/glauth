@@ -55,7 +55,7 @@ Options:
 
 var (
 	log      zerolog.Logger
-	args     map[string]interface{}
+	args     map[string]any
 	yubiAuth *yubigo.YubiAuth
 
 	activeConfig = &config.Config{}
